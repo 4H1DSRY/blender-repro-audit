@@ -186,10 +186,60 @@ dim_x, dim_y, dim_z, dim_sorted_1/2/3, area, materials
 
 ---
 
+## 3. `bake_materials.py` — procedural materials → PBR maps
+
+Blender's glTF exporter is a **texture** exporter, not a node exporter. Every one of the 22
+materials in this scene is a procedural node network (noise, wave, colour ramp — 7 to 27 nodes
+each, zero image textures). Exporting them directly throws the whole chain away and the
+materials collapse to `baseColorFactor = [1,1,1,1]`: white models with no bronze patina and no
+timber grain.
+
+This script flattens each material into maps *before* export:
+
+| Channel | Baked to |
+| --- | --- |
+| Base Color | albedo PNG (sRGB) |
+| Roughness + Metallic | one packed ORM PNG — G = roughness, B = metallic, per the glTF spec — wired through a Separate Color node so the exporter emits a real `metallicRoughnessTexture` |
+
+```bash
+"path/to/blender.exe" -b "scene.blend" -P bake_materials.py -- \
+    --save "out/scene_baked.blend" [--tex-dir "out/textures"] [--tol 0.02] [--samples 1]
+```
+
+- Baking runs per shape-group representative, then the result is shared across that group's
+  instances — same shape and same material means one bake.
+- Resolution is allocated by triangle budget: 128 px for very small parts, 256 px below 600
+  triangles, 512 px above.
+- Materials whose roughness *and* metallic are both constants skip the ORM bake entirely and
+  export as scalar factors.
+- The source `.blend` is never modified; output goes to a new file.
+
+### The trap that costs you an afternoon
+
+`bpy.ops.object.bake` bakes **every material slot on the object**, and each of those materials
+must have an active, selected image texture node. In this scene 81 objects carry two slots, so
+baking only the intended slot produces
+
+```
+Info: no active and selected image texture node found in material "..." for object "..."
+Info: circular dependency on image "..." from object "..."
+```
+
+and eventually takes Blender down mid-run. The fix — install a temporary image node in *every*
+material on the object (the target image for the slot being baked, an 8×8 scratch image for the
+others) — lives in `bake_socket()`.
+
+Second detail: procedural inputs have to be flattened by re-routing the socket to an **Emission**
+node and baking `EMIT`. EMIT is a direct shader evaluation with no light sampling, so
+`--samples 1` suffices and the full 113-slot bake finishes in about two minutes.
+
+---
+
 ## `exports/glb/`
 
 91 standalone `.glb` parts decomposed out of the bronze-bell hall scene, grouped by semantic
-family. Each file imports cleanly into any DCC tool or engine.
+family and **PBR-textured** — baked from the procedural materials, textures embedded in each
+file. Each one imports cleanly into any DCC tool or engine.
 
 - `__n<N>` in a filename means that representative covers N member instances
 - `_INDEX.csv` lists family / member count / triangle count / dimensions / material / bytes
@@ -235,6 +285,9 @@ Tool output from the bronze-bell hall scene:
   figure as an order of magnitude only.
 - Rates are calibrated for a *skilled artist*. Different skill levels need different `RATES`.
 - L3 parameter families need human review by semantic family before you act on the merges.
+- The bake covers base colour and metallic/roughness only. **Normal maps are not baked**, so
+  surface relief carried by bump nodes inside the procedural materials does not survive the
+  glTF export.
 
 ---
 ---
@@ -419,10 +472,51 @@ dim_x, dim_y, dim_z, dim_sorted_1/2/3, area, materials
 
 ---
 
+## 3. `bake_materials.py` —— 程序化材质 → PBR 贴图
+
+Blender 的 glTF 导出器是**贴图导出器，不是节点导出器**。本场景 22 个材质全部是程序化节点
+网络（噪波、波层、色彩斜坡，每个 7~27 个节点，零贴图）。直接导出会把整套计算过程丢掉，
+材质塌缩成 `baseColorFactor = [1,1,1,1]` —— 白模，青铜铜绿与木质纹理全无。
+
+本脚本在导出**之前**把每个材质拍平成贴图：
+
+| 通道 | 烘焙为 |
+| --- | --- |
+| Base Color | albedo PNG（sRGB） |
+| Roughness + Metallic | 合成一张 ORM PNG —— G = 粗糙度，B = 金属度，符合 glTF 规范；经 Separate Color 节点接线，导出器才会输出真正的 `metallicRoughnessTexture` |
+
+```bash
+"Blender路径/blender.exe" -b "scene.blend" -P bake_materials.py -- \
+    --save "out/scene_baked.blend" [--tex-dir "out/textures"] [--tol 0.02] [--samples 1]
+```
+
+- 按「形状组代表」烘焙，再共享给该组所有实例 —— 同形同材质只烤一次
+- 分辨率按面数预算分配：极小件 128 px，600 面以下 256 px，以上 512 px
+- 粗糙度与金属度**都是常量**的材质跳过 ORM 烘焙，直接走 scalar factor
+- **绝不修改原 `.blend`**，结果另存新文件
+
+### 一个能耗掉一下午的坑
+
+`bpy.ops.object.bake` 会烘焙物体的**全部材质槽**，而每个槽的材质都必须有一个「活动且选中
+的图像纹理节点」。本场景有 81 个物体是双槽，只给目标槽装节点就会报：
+
+```
+Info: 在材质 "..." 中未找到活动和选定的图像纹理节点，对物体 "..." 来说
+Info: 循环依赖的图像 "..." 来自物体 "..."
+```
+
+并且最终会把 Blender 拖崩在跑的中途。解法是给该物体用到的**每个**材质都装一个临时图像节点
+（目标槽指向目标图，其余指向一张 8×8 草稿图），实现在 `bake_socket()` 里。
+
+另一个细节：程序化输入必须改接到 **Emission** 节点再烘 `EMIT` 才能拍平。EMIT 是直接求值、
+不采样光照，所以 `--samples 1` 就够 —— 113 个材质槽全量烘焙约两分钟跑完。
+
+---
+
 ## `exports/glb/`
 
-从编钟厅场景中拆出的 **91 个独立 `.glb` 部件**，按语义族分目录，
-每个文件都能独立导入任意 DCC 软件或引擎。
+从编钟厅场景中拆出的 **91 个独立 `.glb` 部件**，按语义族分目录，**已带 PBR 贴图**
+（由程序化材质烘焙而来，贴图内嵌在文件里），每个都能独立导入任意 DCC 软件或引擎。
 
 - 文件名中的 `__n<N>` 表示该代表覆盖了 N 个成员实例
 - `_INDEX.csv` 列出每个文件的族 / 成员数 / 三角面数 / 尺寸 / 材质 / 字节数
@@ -465,3 +559,5 @@ python make_glb_index.py "out/parts_manifest.csv" "exports/glb"
   几小时。结构诊断（部件数、去重率、隐藏成本占比）是可靠的；绝对小时数只应当作量级参考。
 - 费率按「熟练美术」标定，换人换水平需重调 `RATES`。
 - L3 参数族的合并需要人工按语义族复核后才能采用。
+- 烘焙只覆盖 base color 与 metallic/roughness。**法线贴图没有烘焙**，程序化材质里由 bump
+  节点承担的表面起伏不会进入 glTF 导出。
