@@ -31,11 +31,16 @@ Blender's headless mode — no GUI.
 | `bake_materials.py` | Procedural materials → baked PBR maps |
 | `make_glb_index.py` | Builds `exports/glb/_INDEX.csv` |
 | `examples/`, `exports/glb/` | Reports from this scene; 91 PBR-textured `.glb` parts |
+| `assembly/` | Parametric rebuild — spec, assembler, verifier, and the proof |
+| `scene_fingerprint.py` | Order-independent scene fingerprint (shared by the verifier) |
+| `compare_blends.py` | Prove two `.blend` files hold the same scene |
+| `strip_embedded_scripts.py` | Strip embedded Text datablocks before shipping |
 
 **`scene/`** holds the two files everything else was run on:
 
-- `bronze_bell_hall_v2.3.0.blend` (658 KB) — the working file. 22 materials, all procedural
-  and no image textures, so it carries no external dependency at all.
+- `bronze_bell_hall_v2.3.0.blend` (621 KB) — the working file. 22 materials, all procedural
+  and no image textures, so it carries no external dependency at all. Re-saved to strip the
+  embedded audit script (trap 7); the scene itself is unchanged, per `assembly/hygiene-verify.md`.
 - `bronze_bell_hall_v2.3.0.glb` (8.07 MB) — the whole scene, engine-ready: 756 geometry nodes
   sharing 186 mesh datablocks, 192 embedded maps.
 
@@ -119,6 +124,20 @@ allocates resolution by triangle budget (128 px for small parts → 512 px above
 the ORM bake for materials whose roughness *and* metallic are both constants, and never modifies the
 source `.blend`.
 
+## 4. `assembly/` — parametric rebuild from a spec
+
+The tools above *measure* the scene; `assembly/` **rebuilds** it. `extract_assembly_spec.py` dumps the
+whole hall to a declarative JSON spec — 186 recipes covering 756 objects, all 22 procedural node
+graphs, the lighting rig and the cameras. `assemble_scene.py` then reconstructs every object from
+primitives and shader graphs in a fresh file, never opening the original `.blend`.
+`verify_assembly.py` proves the rebuild is the same scene, two independent ways.
+
+Both checks pass and the digest over the **evaluated** geometry matches exactly
+(`78b135637a82de87`): across 756 objects the worst bounding-box deviation is **0.95 um**. Commands
+are in `assembly/README.md`; the full report is `assembly/verification.md`.
+
+Not reproduced: Blender's UI state (workspaces, screen layout) and embedded Text datablocks.
+
 ## Traps worth knowing
 
 1. **Instances inflate audits** — group by `(base name, triangle count)` before charging hours;
@@ -138,6 +157,18 @@ source `.blend`.
 5. **`|` in names bites twice:** escape it in Markdown tables, and use `safe_name()` for index keys,
    because the exporter rewrites pipes to `_` (`Great bell | hollow cast shell`).
 6. **`Material.use_nodes` is deprecated in Blender 6.0** — use `getattr(mat, "node_tree", None)`.
+7. **A `.blend` can carry code.** Text datablocks are invisible in the viewport but travel with
+   the file — a build or audit script left behind, or pasted into the Text Editor, ships to
+   whoever receives the `.blend`: internal notes, absolute paths and all. This scene arrived with
+   our own `blend_repro_audit.py` embedded (1,138 lines / 40,679 chars). Run
+   `strip_embedded_scripts.py` before committing or delivering; it removes Text datablocks only,
+   and `compare_blends.py` proves the scene is untouched (measured: 0 m deviation, all 756 objects).
+8. **Never fold a derived value into an equivalence check.** A bounding-box size is `max - min`,
+   so a spec that quantises lengths to 1 um can round the *difference* onto the far side of a
+   boundary and report a phantom 1e-6 mismatch — 6 of 668 objects did exactly that here. Compare
+   derived lengths against a stated tolerance, and print the measured deviation next to the PASS.
+   The tolerance is honest too: Blender stores mesh vertices as float32, whose quantum at this
+   scene's ~10 m extent is ~0.6 um, so a 1 um spec discards nothing the `.blend` could represent.
 
 ## Environment & limitations
 
@@ -182,11 +213,16 @@ Blender 场景都通用，就单独抽出来成了这个仓库。所有脚本都
 | `bake_materials.py` | 程序化材质 → 烘焙 PBR 贴图 |
 | `make_glb_index.py` | 生成 `exports/glb/_INDEX.csv` |
 | `examples/`、`exports/glb/` | 本场景的工具输出；91 个已带 PBR 贴图的 `.glb` 部件 |
+| `assembly/` | 参数化重建 —— spec、装配器、验证器与验证报告 |
+| `scene_fingerprint.py` | 顺序无关的场景指纹（验证器共用） |
+| `compare_blends.py` | 证明两个 `.blend` 是同一个场景 |
+| `strip_embedded_scripts.py` | 交付前剥离内嵌的 Text 数据块 |
 
 **`scene/`** 里放着上面所有工具实际处理的源文件：
 
-- `bronze_bell_hall_v2.3.0.blend`（658 KB）—— 工作文件。22 个材质全部程序化、零贴图，
-  因此**没有任何外部依赖**。
+- `bronze_bell_hall_v2.3.0.blend`（621 KB）—— 工作文件。22 个材质全部程序化、零贴图，
+  因此**没有任何外部依赖**。已重新保存以剥离内嵌的审计脚本（见第 7 条坑）；
+  场景本体未变，证据见 `assembly/hygiene-verify.md`。
 - `bronze_bell_hall_v2.3.0.glb`（8.07 MB）—— 整场景，引擎即用：756 个几何节点共享
   186 个网格数据块，192 张贴图全部内嵌。
 
@@ -262,6 +298,18 @@ Blender 的 glTF 导出器是**贴图导出器，不是节点导出器**。本�
 按「形状组代表」烘焙一次、再共享给该组所有实例；分辨率按面数预算分配（极小件 128 px → 600 面以上
 512 px）；粗糙度与金属度**都是常量**的材质跳过 ORM 烘焙；**绝不修改原 `.blend`**，结果另存新文件。
 
+## 4. `assembly/` —— 从声明式 spec 参数化重建
+
+上面三个工具是**测量**场景，`assembly/` 是**重建**场景。`extract_assembly_spec.py` 把整座厅堂导出成
+一份声明式 JSON spec —— **186 条配方覆盖 756 个物体**，含全部 22 个程序化节点图、灯光组与相机。
+`assemble_scene.py` 随后在一个全新文件里用图元 + 着色器图把每个物体重新装配出来，
+**全程不打开原始 `.blend`**。`verify_assembly.py` 用两项独立检查判定重建是否忠实。
+
+两项都通过，**求值后几何的摘要值完全一致**（`78b135637a82de87`）—— 756 个物体中最大的包围盒偏差
+是 **0.95 µm**。命令见 `assembly/README.md`，完整报告见 `assembly/verification.md`。
+
+**不重建的部分**：Blender 的界面状态（工作区、屏幕布局）与内嵌 Text 数据块。
+
 ## 几个容易踩的坑
 
 1. **实例会虚高审计结果** —— 计工时前先按 `(基名, 三角面数)` 分组；本场景差值是 842 小时对
@@ -280,6 +328,16 @@ Blender 的 glTF 导出器是**贴图导出器，不是节点导出器**。本�
 5. **名字里的 `|` 会咬两次：** Markdown 表格里必须转义，索引键必须用 `safe_name()` —— 因为导出时
    竖线会被替换成 `_`（如 `Great bell | hollow cast shell`）。
 6. **`Material.use_nodes` 在 Blender 6.0 已废弃**，改用 `getattr(mat, "node_tree", None)`。
+7. **`.blend` 会携带代码。** Text 数据块在视口里看不见，却跟着文件一起走 —— 跑构建/审计脚本
+   时留下的、或往 Text Editor 里粘过的代码，会原样交付给收到 `.blend` 的人：内部备注、绝对
+   路径都在里面。这份场景当初就内嵌着我们自己的 `blend_repro_audit.py`（1,138 行 / 40,679
+   字符）。提交或交付前先跑 `strip_embedded_scripts.py`；它**只删 Text 数据块**，并由
+   `compare_blends.py` 证明场景本体没被改动（实测 756 个物体偏差 0 m）。
+8. **别把「派生量」塞进等价性判定。** 包围盒尺寸是 `max - min`，所以一份把长度量化到 1 µm 的
+   spec，可能让这个**差值**落到四舍五入边界的另一侧，报出一个并不存在的 1e-6 差异 —— 本场景
+   668 个物体里就有 6 个是这样。派生长度要按**声明的容差**比较，并且把**实测偏差**打在 PASS
+   旁边。这个容差本身也是诚实的：Blender 的网格顶点是 float32，在本场景约 10 m 的尺度下量化
+   步长约 0.6 µm，所以 1 µm 的 spec 并没有丢掉 `.blend` 本来能表示的任何信息。
 
 ## 环境与已知限制
 
