@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *.blend1
 *.blend2
+*.backup.blend
 .DS_Store
 Thumbs.db
 regen_check/

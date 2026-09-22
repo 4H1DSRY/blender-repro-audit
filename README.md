@@ -20,15 +20,26 @@ Blender's headless mode — no GUI.
   from a handful of parameters and the file stays self-contained.
 - **Result:** 668 mesh objects, 35,942 triangles, 22 materials, no rig, no animation — and after
   clustering, only **91 distinct shapes** in **75 semantic families** (86.4% compression). That
-  ratio is what made the job tractable.
+  ratio is what made the job tractable. Add the 88 curve objects (see trap 3) and the scene
+  totals **756 geometry objects / 63,590 triangles**.
 
 | Path | What it is |
 | --- | --- |
+| `scene/` | The source scene itself — `.blend` + whole-scene `.glb` |
 | `blend_repro_audit.py` | Cost audit — hours to rebuild the scene from scratch |
 | `blend_extract_parts.py` | Extract unique parts, cluster them, export `.glb` |
 | `bake_materials.py` | Procedural materials → baked PBR maps |
 | `make_glb_index.py` | Builds `exports/glb/_INDEX.csv` |
 | `examples/`, `exports/glb/` | Reports from this scene; 91 PBR-textured `.glb` parts |
+
+**`scene/`** holds the two files everything else was run on:
+
+- `bronze_bell_hall_v2.3.0.blend` (658 KB) — the working file. 22 materials, all procedural
+  and no image textures, so it carries no external dependency at all.
+- `bronze_bell_hall_v2.3.0.glb` (8.07 MB) — the whole scene, engine-ready: 756 geometry nodes
+  sharing 186 mesh datablocks, 192 embedded maps.
+
+Point either script at that `.blend` and the reports in `examples/` reproduce.
 
 ## 1. `blend_repro_audit.py` — cost audit
 
@@ -160,15 +171,26 @@ Blender 场景都通用，就单独抽出来成了这个仓库。所有脚本都
 - **分轮推进：** 木构梁架 → 青铜配件 → 陈设与人像 → 灯光。
 - **全程序化材质，零贴图。** 每个材质都是节点搭建，整套配色由少数几个参数控制，文件保持自包含。
 - **结果：** 668 个网格物体、35,942 三角面、22 个材质、无骨骼、无动画 —— 聚类之后只有
-  **91 种不同形状**，归入 **75 个语义族**（压缩率 86.4%）。正是这个比例让整件事可行。
+  **91 种不同形状**，归入 **75 个语义族**（压缩率 86.4%）。正是这个比例让整件事可行。再加上 88 个曲线物体（见第 3 条坑），整场景合计
+**756 个几何物体 / 63,590 三角面**。
 
 | 路径 | 说明 |
 | --- | --- |
+| `scene/` | 源场景本体 —— `.blend` + 整场景 `.glb` |
 | `blend_repro_audit.py` | 工时成本审计 —— 从零重建需要多少小时 |
 | `blend_extract_parts.py` | 提取唯一部件、聚类、导出 `.glb` |
 | `bake_materials.py` | 程序化材质 → 烘焙 PBR 贴图 |
 | `make_glb_index.py` | 生成 `exports/glb/_INDEX.csv` |
 | `examples/`、`exports/glb/` | 本场景的工具输出；91 个已带 PBR 贴图的 `.glb` 部件 |
+
+**`scene/`** 里放着上面所有工具实际处理的源文件：
+
+- `bronze_bell_hall_v2.3.0.blend`（658 KB）—— 工作文件。22 个材质全部程序化、零贴图，
+  因此**没有任何外部依赖**。
+- `bronze_bell_hall_v2.3.0.glb`（8.07 MB）—— 整场景，引擎即用：756 个几何节点共享
+  186 个网格数据块，192 张贴图全部内嵌。
+
+把两个脚本指向这个 `.blend`，`examples/` 里的报告即可复现。
 
 ## 1. `blend_repro_audit.py` —— 工时成本审计
 
