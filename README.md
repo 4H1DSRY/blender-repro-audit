@@ -163,6 +163,10 @@ Not reproduced: Blender's UI state (workspaces, screen layout) and embedded Text
    our own `blend_repro_audit.py` embedded (1,138 lines / 40,679 chars). Run
    `strip_embedded_scripts.py` before committing or delivering; it removes Text datablocks only,
    and `compare_blends.py` proves the scene is untouched (measured: 0 m deviation, all 756 objects).
+   **Then check every copy.** The same scene exists in two places here — a 621 KB editable `.blend`
+   in the repo and a 6.3 MB baked `.blend` inside the delivery zip — and stripping one leaves the
+   other still carrying the script. Enumerate `bpy.data.texts` in *each* `.blend` before packaging,
+   not just the one you happen to be working on.
 8. **Never fold a derived value into an equivalence check.** A bounding-box size is `max - min`,
    so a spec that quantises lengths to 1 um can round the *difference* onto the far side of a
    boundary and report a phantom 1e-6 mismatch — 6 of 668 objects did exactly that here. Compare
@@ -333,6 +337,9 @@ Blender 的 glTF 导出器是**贴图导出器，不是节点导出器**。本�
    路径都在里面。这份场景当初就内嵌着我们自己的 `blend_repro_audit.py`（1,138 行 / 40,679
    字符）。提交或交付前先跑 `strip_embedded_scripts.py`；它**只删 Text 数据块**，并由
    `compare_blends.py` 证明场景本体没被改动（实测 756 个物体偏差 0 m）。
+   **然后逐个副本都要查。** 同一份场景在本项目里存在两处 —— 仓库里 621 KB 的可编辑 `.blend`，
+   以及交付 zip 里 6.3 MB 的烘焙版 `.blend` —— 只清一份，另一份照样带着脚本。
+   打包前要**对每一个** `.blend` 都列一遍 `bpy.data.texts`，不能只查手头正在改的那个。
 8. **别把「派生量」塞进等价性判定。** 包围盒尺寸是 `max - min`，所以一份把长度量化到 1 µm 的
    spec，可能让这个**差值**落到四舍五入边界的另一侧，报出一个并不存在的 1e-6 差异 —— 本场景
    668 个物体里就有 6 个是这样。派生长度要按**声明的容差**比较，并且把**实测偏差**打在 PASS
