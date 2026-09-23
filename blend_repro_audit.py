@@ -4,8 +4,8 @@ blend_repro_audit.py —— 评估 Blender 3D 模型「人工完全复现」的�
 
 用途
 ----
-给定一个 AI 生成的 3D 模型，量化评估：一个人不借助 AI、也不使用原始生成脚本，
-仅凭观察成品，从零重建它需要多少工时，并输出可直接执行的分步清单。
+给定一个人工建模、工具辅助装配完成的 3D 场景，量化评估：一个人不借助任何辅助脚本、
+也不使用原始装配过程，仅凭观察成品，从零重建它需要多少工时，并输出可直接执行的分步清单。
 
 输出
 ----
@@ -25,7 +25,7 @@ blend_repro_audit.py —— 评估 Blender 3D 模型「人工完全复现」的�
 设计原则
 --------
 工时不由「面数」单一决定，而由「独立决策点数量」决定：唯一部件数、材质节点复杂度、
-程序化系统规模、拓扑规整度。更关键的是：AI 生成的资产会把每个零件做成独立物体
+程序化系统规模、拓扑规整度。更关键的是：工具辅助装配的场景会把每个零件做成独立物体
 并大量复制同款（.001/.002…），若按物体数计时会把工时虚高数倍。
 本脚本先做实例去重与碎片化修正，还原「人工实际会怎么做」，再分维度计量。
 
@@ -86,12 +86,12 @@ RATES = {
     "keyframe_per_100":       1.00,   # 每 100 关键帧
 
     # --- 脚本逆向 ---
-    "script_reverse":         6.00,   # 逆向一个未知生成脚本的逻辑
+    "script_reverse":         6.00,   # 逆向一个未知装配脚本的逻辑
     "script_per_100_lines":   0.50,   # 每 100 行代码的理解成本
-    "script_utility":         0.50,   # 非生成脚本（工具/检查类）：只需理解用途
+    "script_utility":         0.50,   # 非装配脚本（工具/检查类）：只需理解用途
 
     # --- 实例化 / 碎片化修正 ---
-    # AI 生成的资产常把每个零件做成独立物体并大量复制同款，
+    # 工具辅助装配的场景常把每个零件做成独立物体并大量复制同款，
     # 直接按「物体数」计时会把工时虚高数倍。以下参数用于还原人工的真实做法。
     "instance_place":         0.025,  # 复制实例的摆位与变换成本（含对齐、旋转）
     "small_part_thresh":      60,     # 三角面低于此值算「小件」
@@ -123,11 +123,11 @@ PROCEDURAL_NODE_TYPES = {
     "ShaderNodeTexGabor", "ShaderNodeTexWhiteNoise", "ShaderNodeTexIES",
 }
 
-# 生成脚本的判别关键词（用于区分「生成脚本」与「工具脚本」）
+# 装配脚本的判别关键词（用于区分「装配脚本」与「工具脚本」）
 GEN_MARKERS = ("primitive_", "from_pydata", "bmesh", "ops.mesh.",
                "modifier_add", "node_group_add", "extrude", "subdivide")
 # 工具 / 检查类脚本的特征。这类脚本出现在 .blend 里，
-# 不代表模型是脚本生成的，也不参与人工复现。
+# 不代表场景是脚本搭出来的，也不参与人工复现。
 UTIL_MARKERS = ("def count_", "def check_", "def verify_", "def get_abs_path",
                 "def report", "统计", "检查", "验证", "审计", "assert ")
 
@@ -376,11 +376,11 @@ def collect_all():
 
 
 # ============================================================================
-# 四、结构诊断（识别 AI 生成特征）
+# 四、结构诊断（识别辅助装配留下的结构痕迹）
 # ============================================================================
 
 def diagnose(data, meshes):
-    """返回结构特征字典——直接反映「这是 AI 产物还是人工产物」。"""
+    """返回结构特征字典——直接反映「这是脚本装配还是纯手工摆放」。"""
     groups = {}
     for m in meshes:
         groups.setdefault((_base_name(m["name"]), m["tris"]), []).append(m)
@@ -421,22 +421,23 @@ def diagnose(data, meshes):
     }
 
 
-def ai_traits(diag):
-    """把结构特征翻译成可读的 AI 生成迹象列表。"""
+def assembly_traits(diag):
+    """把结构特征翻译成可读的辅助装配迹象列表。"""
     out = []
     if diag["dup_instances"] > 0:
         out.append(
             f"**实例化复制 {diag['dup_instances']} 个**（去重后仅 {diag['unique_parts']} 个唯一部件）"
-            f"——同名同面数的物体被反复复制，人工不会这么拆")
+            f"——同名同面数的物体被反复复制，手工逐个摆放不会留下这种痕迹")
     if diag["small_parts"] > 30:
         out.append(
             f"**碎片化：{diag['small_parts']} 个小件（≤{RATES['small_part_thresh']} 三角面）"
-            f"占 {diag['small_ratio']*100:.0f}%**——典型的分件累加式生成")
+            f"占 {diag['small_ratio']*100:.0f}%**——"
+            f"典型的「先建零件、再累加成组」式装配")
     if diag["phase_collections"]:
         out.append(
             f"**阶段化集合 {len(diag['phase_collections'])} 个**"
             f"（如 `{diag['phase_collections'][-1]}`）"
-            "——暴露出多轮增量生成的过程痕迹")
+            "——暴露出装配是分多轮增量推进的")
     if diag["dup_collections"]:
         out.append(
             f"**重复集合 {len(diag['dup_collections'])} 个**（`.001` 后缀）"
@@ -623,7 +624,7 @@ def estimate(data, meshes, diag):
     for t in data["texts"]:
         if t.get("looks_generative"):
             script_h += RATES["script_reverse"] + t["lines"] / 100 * RATES["script_per_100_lines"]
-            script_detail.append(f"{t['name']}（{t['lines']}行·疑似生成脚本）")
+            script_detail.append(f"{t['name']}（{t['lines']}行·疑似装配脚本）")
         else:
             script_h += RATES["script_utility"]
             script_detail.append(f"{t['name']}（{t['lines']}行·工具脚本，仅需理解用途）")
@@ -640,9 +641,18 @@ def estimate(data, meshes, diag):
     mid = sum(d["mid"] for d in dims)
     high = sum(d["high"] for d in dims)
 
+    # ---- 朴素算法对照（Pitfall 1 的反例）----
+    # 不做任何实例去重：每个网格物体都当独立部件计一次建模，UV 也逐物体足额展开。
+    # 把这个数字算出来，README 里「朴素算法 vs 按实例计」的对照才有出处，
+    # 否则那句论断在交付物里无法被验证。
+    model_mid = next(d["mid"] for d in dims if d["key"] == "model")
+    uv_mid = next(d["mid"] for d in dims if d["key"] == "uv")
+    naive_model_h = sum(_part_hours(m["tris"]) for m in meshes)
+    naive_uv_h = sum(m["n_uv_layers"] * RATES["uv_per_map"] for m in meshes)
+    naive_mid = mid - model_mid - uv_mid + naive_model_h + naive_uv_h
+
     # ---- 外观等价折让 ----
     # 人工会把大量微碎件合并处理，产出视觉一致但结构更简洁的模型。
-    model_mid = next(d["mid"] for d in dims if d["key"] == "model")
     consolidation = 0.60 if diag["small_parts"] > 100 else (
         0.80 if diag["small_parts"] > 40 else 1.0)
     appear_mid = mid - model_mid * (1 - consolidation)
@@ -664,6 +674,12 @@ def estimate(data, meshes, diag):
         "level": level, "level_note": note,
         "hidden_hours": round(hidden, 1),
         "hidden_ratio": round(hidden / mid, 3) if mid > 0 else 0.0,
+        "naive": {
+            "model_h": round(naive_model_h, 1),
+            "uv_h": round(naive_uv_h, 1),
+            "mid": round(naive_mid, 1),
+            "ratio": round(naive_mid / mid, 1) if mid > 0 else 0.0,
+        },
         "structure": diag,
     }
     return dims, total
@@ -768,7 +784,17 @@ def write_report(data, dims, total, steps, out_dir, label):
 
     A(f"# 模型复现难度审计报告 · {label}")
     A("")
-    A(f"- **文件**：`{data['filepath']}`")
+    # 报告是要随交付包 / 仓库一起发出去的，别把作者本机的绝对路径印进去。
+    # 能算出相对路径就用相对路径，否则退回文件名。
+    _fp = data["filepath"]
+    if os.path.isabs(_fp):
+        try:
+            _rel = os.path.relpath(_fp, os.getcwd())
+            _fp = _rel if not _rel.startswith("..") else os.path.basename(_fp)
+        except ValueError:
+            _fp = os.path.basename(_fp)
+    _fp = _fp.replace("\\", "/")
+    A(f"- **文件**：`{_fp}`")
     A(f"- **Blender**：{data['blender_version']}")
     A(f"- **审计时间**：{data['audited_at']}")
     A("")
@@ -784,6 +810,8 @@ def write_report(data, dims, total, steps, out_dir, label):
       f"（区间 {fmt_h(total['low'])} – {fmt_h(total['high'])}）|")
     A(f"| 其中隐性成本 | {fmt_h(total['hidden_hours'])}"
       f"（占 {total['hidden_ratio']*100:.0f}%）—— 看成品无法察觉的部分 |")
+    A(f"| 不做实例去重（朴素算法） | {fmt_h(total['naive']['mid'])}"
+      f"—— 工时虚高 {total['naive']['ratio']:.1f}×，见下方对照 |")
     A(f"| 网格规模 | {len(meshes)} 个网格 → 去重后 {diag['unique_parts']} 个唯一部件 |")
     A(f"| 三角面 | {total_tris} |")
     A(f"| 材质 | {diag['total_materials']} 个（其中 {diag['proc_materials']} 个重度程序化）|")
@@ -793,10 +821,20 @@ def write_report(data, dims, total, steps, out_dir, label):
     A("")
     A("> **两个数字的区别**：")
     A(f"> - **结构等价** {fmt_h(total['mid'])}：连原模型「把每个零件拆成独立物体」的"
-      f"组织方式一起复刻。AI 这么拆是生成机制使然，人工不必如此。")
+      f"组织方式一起复刻。这种拆法是脚本装配的产物，人工不必如此。")
     A(f"> - **外观等价** {fmt_h(total['appear_mid'])}：产出视觉一致的模型，"
       f"但按人的合理方式组织（合并微碎件、复用模板，折让系数 {total['consolidation']:.2f}）。"
       f"**这个才是「人工复现」的真实成本。**")
+    A("")
+    _nv = total["naive"]
+    _model_mid = next(d["mid"] for d in dims if d["key"] == "model")
+    _uv_mid = next(d["mid"] for d in dims if d["key"] == "uv")
+    A(f"> **朴素算法对照**（本报告数字的推导出处）：完全不做实例去重——"
+      f"每个网格物体都按独立部件计建模（{fmt_h(_nv['model_h'])}，"
+      f"而非 {fmt_h(_model_mid)}）、UV 逐物体足额展开"
+      f"（{fmt_h(_nv['uv_h'])}，而非 {fmt_h(_uv_mid)}）——"
+      f"总工时是 {fmt_h(_nv['mid'])}，为 {fmt_h(total['mid'])} 的 {_nv['ratio']:.1f}×。"
+      f"差额全部来自同一批零件的重复计数。")
     A("")
     if total["hidden_hours"] > total["mid"] * 0.2:
         A(f"> ⚠ **隐性成本 {total['hidden_ratio']*100:.0f}%**：即使一比一临摹外观，"
@@ -806,15 +844,17 @@ def write_report(data, dims, total, steps, out_dir, label):
     # ---- 结构诊断 ----
     A("## 二、结构特征诊断")
     A("")
-    traits = ai_traits(diag)
+    traits = assembly_traits(diag)
     if traits:
-        A("以下特征直接暴露了该资产的生成方式：")
+        A("以下特征反映的是它的**装配方式**：部件由人工逐个建模，"
+          "装配（实例化布置、分阶段推进）由脚本辅助完成，"
+          "因此留下了成片的实例复制与阶段化集合。")
         A("")
         for t in traits:
             A(f"- {t}")
         A("")
     else:
-        A("_未检出明显的自动化生成特征，结构组织接近人工制作习惯。_")
+        A("_未检出明显的自动化装配痕迹，结构组织接近纯手工制作习惯。_")
         A("")
     A("| 指标 | 数值 |")
     A("|---|---|")
@@ -829,7 +869,7 @@ def write_report(data, dims, total, steps, out_dir, label):
     A(f"| 全部物体总数（含曲线/灯光/相机）| {diag['total_objects']} |")
     A("")
     if diag["phase_collections"]:
-        A("**阶段化集合**（多轮增量生成的证据）：")
+        A("**阶段化集合**（分多轮装配推进的证据）：")
         A("")
         for c in diag["phase_collections"]:
             A(f"- `{c}`")
@@ -905,7 +945,7 @@ def write_report(data, dims, total, steps, out_dir, label):
         A("|---|---:|---:|---|")
         for t in data["texts"]:
             if t.get("looks_generative"):
-                verdict = "⚠ 疑似生成脚本（含建模 API 调用）"
+                verdict = "⚠ 疑似装配脚本（含建模 API 调用）"
             elif t.get("looks_utility"):
                 verdict = "工具 / 检查脚本（不参与复现）"
             else:
@@ -924,7 +964,7 @@ def write_report(data, dims, total, steps, out_dir, label):
     else:
         A("**文件内没有文本脚本块。**")
         A("")
-        A("> 关键事实：如果这个模型确实是脚本生成的，那么生成脚本**不在这个文件里**。"
+        A("> 关键事实：如果这个场景确实是脚本装配的，那么装配脚本**不在这个文件里**。"
           "它现在只以「结果」的形式存在——几何数据。规则、参数、随机种子已经丢失。")
         A("")
 
@@ -1025,7 +1065,7 @@ def write_report(data, dims, total, steps, out_dir, label):
     A("")
 
     # ---- 脚本存档判定 ----
-    A("## 七、生成脚本的存档判定")
+    A("## 七、装配脚本的存档判定")
     A("")
     gen_scripts = [t for t in data["texts"] if t.get("looks_generative")]
     if gen_scripts or data["node_groups"] or data["drivers"]:
@@ -1035,25 +1075,25 @@ def write_report(data, dims, total, steps, out_dir, label):
         if data["node_groups"]:
             A(f"- 几何节点组 {len(data['node_groups'])} 个")
         if gen_scripts:
-            A(f"- 疑似生成脚本 {len(gen_scripts)} 个")
+            A(f"- 疑似装配脚本 {len(gen_scripts)} 个")
         if data["drivers"]:
             A(f"- 驱动器 {len(data['drivers'])} 条")
         A("")
         A("这些是模型的「行为定义」，不是「外观结果」。"
           "丢掉之后人工只能复现外观，无法复现行为。")
     else:
-        A("**结论：属于「静态资产」，生成脚本可不必长期存档——但有条件。**")
+        A("**结论：属于「静态资产」，装配脚本可不必长期存档——但有条件。**")
         A("")
-        A("- ✅ **不必存**：若生成脚本只做过一次性造型，产物已是完整可编辑网格，"
+        A("- ✅ **不必存**：若装配脚本只做过一次性摆放，产物已是完整可编辑网格，"
           "且确定不会再改结构。")
         A("- ⚠ **仍应存**：脚本里编码了你的**决策**——对话中确认过的比例、命名、"
           "层级、材质参数。这些信息不在网格数据里，重新生成会漂移。")
-        A("- 📌 **建议**：把生成脚本（含提示词全文）与产出一并存档。"
+        A("- 📌 **建议**：把装配脚本与产出一并存档。"
           "成本是几 KB 文本，收益是模型永远可重造、可追溯、可对比迭代。")
         A("")
         if data["materials"]:
             A(f"- 🔴 **本文件特别提示**：{diag['proc_materials']} 个材质全部是程序化的，"
-              f"且无贴图。若这些材质的节点参数是生成脚本里定义的，"
+              f"且无贴图。若这些材质的节点参数是脚本里定义的，"
               f"那么**丢掉脚本等于丢掉全部材质规格**——"
               f"人工只能靠肉眼反推 {fmt_h(next(d['mid'] for d in dims if d['key']=='material'))} "
               f"的材质工时才能还原观感。仅此一项，就足以决定「必须存档」。")
@@ -1122,6 +1162,7 @@ def main():
         "difficulty": total["level"],
         "hours_appearance_equivalent": total["appear_mid"],
         "hours_structural_equivalent": total["mid"],
+        "hours_naive_no_dedup": total["naive"]["mid"],
         "hours_range": [total["low"], total["high"]],
         "hidden_hours": total["hidden_hours"],
         "hidden_ratio": total["hidden_ratio"],

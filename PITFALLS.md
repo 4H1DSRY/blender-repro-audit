@@ -12,8 +12,8 @@ Found the hard way while building the audit / bake / export pipeline in this rep
 gives the symptom, the cause and the fix. The numbers here are the ones the README refers to as
 *trap N*.
 
-1. **Instances inflate audits.** Group by `(base name, triangle count)` before charging hours — 842 h
-   versus 97.2 h here.
+1. **Instances inflate audits.** Group by `(base name, triangle count)` before charging hours — 678.7 h
+   versus 106.9 h here (`examples/audit_report.md` prints both).
 2. **L3 merges geometric twins, not semantic twins.** A 0.1 × 0.1 twelve-face prism might be a lantern
    bracket or a table leg. Merges spanning families are marked `⚠ spans N semantic families` — split
    them back apart before acting on them.
@@ -55,7 +55,7 @@ gives the symptom, the cause and the fix. The numbers here are the ones the READ
 
 九个在搭建这条管线时踩出来的坑，每条都写了现象、原因与修法。编号即 README 里引用的「第 N 条坑」。
 
-1. **实例会虚高审计结果** —— 计工时前先按 `(基名, 三角面数)` 分组；本场景差值是 842 小时对 97.2 小时。
+1. **实例会虚高审计结果** —— 计工时前先按 `(基名, 三角面数)` 分组；本场景差值是 678.7 小时对 106.9 小时（`examples/audit_report.md` 两个都印）。
 2. **L3 合的是几何同形，不是语义等价。** 一根 0.1 × 0.1 的 12 面棱柱，既可能是**灯笼的挑梁**，也可能是
    **桌腿**。报告里对这类合并会打 `⚠ 跨 N 个语义族` 的警告 —— 看到该标记就该按语义族拆回去再采用。
 3. **只处理网格不等于处理完了整个场景。** `CURVE`、`SURFACE`、`FONT`、`META` 类型的物体同样可能携带
