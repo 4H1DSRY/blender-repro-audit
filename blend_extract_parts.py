@@ -322,6 +322,21 @@ def esc(s):
     return str(s).replace("|", "\\|")
 
 
+def source_label(src):
+    """报告是要随交付包 / 仓库一起发出去的，别把作者本机的绝对路径印进去。
+
+    落在当前工作目录之内就用相对路径，否则退回纯文件名。
+    （`blend_repro_audit.py` 对审计报告做的是同一件事。）
+    """
+    if os.path.isabs(src):
+        try:
+            rel = os.path.relpath(src, os.getcwd())
+        except ValueError:
+            return os.path.basename(src).replace("\\", "/")
+        return (rel if not rel.startswith("..") else os.path.basename(src)).replace("\\", "/")
+    return src.replace("\\", "/")
+
+
 def write_reports(sigs, groups, out_dir, src, args, export_info, asset_info):
     total_meshes = len(sigs)
     total_tris = sum(s["tris"] for s in sigs)
@@ -331,7 +346,7 @@ def write_reports(sigs, groups, out_dir, src, args, export_info, asset_info):
     A = L.append
     A("# 部件提取与同类聚类报告")
     A("")
-    A(f"- **源文件**：`{src}`")
+    A(f"- **源文件**：`{source_label(src)}`")
     A(f"- **网格物体总数**：{total_meshes}")
     A(f"- **三角面总数**：{total_tris}")
     A(f"- **几何容差**：{args.tol*100:.1f}%")
