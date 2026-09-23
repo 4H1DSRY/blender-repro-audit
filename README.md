@@ -133,6 +133,8 @@ only reference material used.
 | `scene_fingerprint.py` | Order-independent scene fingerprint (shared by the verifier) |
 | `compare_blends.py` | Prove two `.blend` files hold the same scene |
 | `strip_embedded_scripts.py` | Strip embedded Text datablocks before shipping |
+| `sanitize_blend_paths.py` | Rewrite absolute image paths to relative, so a shipped `.blend` leaks nothing |
+| `check_abs_paths.py` | Report which absolute paths a `.blend` still carries |
 
 ---
 
@@ -525,6 +527,8 @@ script prints a warning if the file it produced is too big to preview.
 | `scene_fingerprint.py` | 顺序无关的场景指纹（验证器共用） |
 | `compare_blends.py` | 证明两个 `.blend` 是同一个场景 |
 | `strip_embedded_scripts.py` | 交付前剥离内嵌的 Text 数据块 |
+| `sanitize_blend_paths.py` | 把图像绝对路径改写为相对路径，交付不泄露本机目录 |
+| `check_abs_paths.py` | 体检 `.blend` 里还剩哪些绝对路径 |
 
 ---
 
