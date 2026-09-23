@@ -15,17 +15,75 @@
   <img alt="Shapes" src="https://img.shields.io/badge/distinct%20shapes-91%20in%2075%20families-brightgreen?style=flat-square">
 </p>
 
-> **One reference image in; a hand-built scene and a reusable toolkit out.**
+> **One reference image in; a hand-modelled scene and a reusable toolkit out.**
 >
-> I rebuilt a bronze-bell ceremonial hall by hand in Blender from a single photograph — timber
-> post-and-beam framing, a great bell on a gallows frame, two racks of small bells on bronze hangers,
-> offering tables and ritual vessels, kneeling attendants, a colonnade, a coffered ceiling, stone
-> paving and rear wall niches.
+> From a single reference image of a bronze-bell ceremonial hall I modelled **every part by hand** in
+> Blender — timber post-and-beam framing, a great bell on a gallows frame, two racks of small bells
+> on bronze hangers, offering tables and ritual vessels, kneeling attendants, a colonnade, a
+> coffered ceiling, stone paving and rear wall niches.
 >
-> The scripts here are the tooling I wrote for that job. They generalise to any Blender scene, and
-> every one of them runs in Blender's headless mode — no GUI.
+> **Assembly and checking were AI-assisted**: placing the instances that turn ~91 distinct parts
+> into 756 objects, building the hall up in passes, then auditing and verifying the result. The
+> scripts here are that second half of the job. They generalise to any Blender scene, and every one
+> of them runs in Blender's headless mode — no GUI.
 >
 > **Reference image:** supplied by Prof. Eugene Ch'ng (庄以仁), 22 July 2026.
+
+---
+
+<a name="what"></a>
+
+## What this repository is — and is not
+
+| | |
+| :--- | :--- |
+| **The main line** | **one reference image → every part modelled by hand → the finished `.blend`** |
+| **Where AI came in** | **assembly and checking** — placing the instances, building the hall up in passes, then auditing and verifying the result. The staged collections are that build order, fossilised. |
+| **What this repo holds** | the layer *after* the `.blend`: audit, part-decomposition, material-baking and engine-export tooling, plus the reports those tools produce on this scene |
+| **What is not here** | the modelling itself — it predates the repository. The reference image is dated **22 Jul 2026**; this repository starts **21 Sep 2026**. Across those weeks the parts were modelled; from 21 Sep the work became something scripts could hold onto, and that is what the commit history shows |
+| **What it does not claim** | that the geometry is machine-generated. The parts were modelled by hand; what a script did was instance them and stage the build-up |
+
+---
+
+<a name="reference"></a>
+
+## Before and after
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="media/reference.jpg" alt="The single reference image" width="100%"><br>
+<sub><b>Input</b> — the one reference image, supplied 22 Jul 2026</sub></td>
+<td width="50%" align="center"><img src="media/render-01-reference-composition.jpg" alt="The reconstruction, same composition" width="100%"><br>
+<sub><b>Output</b> — the reconstruction, matched to the same composition</sub></td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="media/render-02-start-walking.jpg" alt="Walking in" width="100%"><br><sub>Walking in from the entrance</sub></td>
+<td width="50%" align="center"><img src="media/render-03-side-inspection.jpg" alt="Side elevation" width="100%"><br><sub>Side elevation</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="media/render-04-reverse-inspection.jpg" alt="Reverse view" width="100%"><br><sub>Reverse view — the rear wall here is inferred, not observed</sub></td>
+<td width="50%" align="center"><img src="media/render-05-bell-material-study.jpg" alt="Bell material study" width="100%"><br><sub>Bell material study</sub></td>
+</tr>
+</table>
+
+**Rotate it yourself:** [**`scene/bronze_bell_hall_v2.3.0.stl`**](scene/bronze_bell_hall_v2.3.0.stl)
+— GitHub renders `.stl` natively, so that link opens the reconstruction in a viewer you can drag.
+3.03 MB, 63,590 triangles, geometry only. The `.blend` and `.glb` next to it do **not** preview on
+GitHub: `.stl` is the one 3D format GitHub displays, and that is the only reason a third export
+exists.
+
+**The reference, stated plainly.** **One image, one view** — and it appears to be a **digital
+rendering** rather than a photograph: no photographic texture detail, no lens artefacts, and a
+stylised palette. It carries **no scale** — no dimension line, no scale bar, no object of known
+size — so the hall was scaled by eye. Everything the view cannot show (the rear wall and its
+niches, the ceiling behind the central opening, the space beside the colonnade, the depth of the
+side shelving) is **inferred, not observed**.
+
+The five renders come from the reconstruction itself; `media/reference.jpg` is the input, and the
+only reference material used.
 
 ---
 
@@ -38,9 +96,10 @@
 | **Geometry** | **756 objects / 63,590 triangles** — 668 meshes + 88 curve objects |
 | **Materials** | **22**, all procedural node networks — **zero image textures** |
 | **Distinct shapes** | **91** in **75 semantic families** — 86.4% compression |
-| **Cost audit** | 842 h naive → **97.2 h** instance-aware |
+| **Cost audit** | **96.7 h** appearance-equivalent — vs **678.7 h** with no instance awareness |
 | **glTF export** | 756 geometry nodes over **186 mesh datablocks** + **192** embedded maps |
 | **Rebuild check** | spec round-trip verified — worst bounding-box deviation **0.95 µm** |
+| **Viewer export** | [`scene/*.stl`](scene/bronze_bell_hall_v2.3.0.stl) — **3.03 MB / 63,590 tris**, rendered by GitHub itself |
 
 ---
 
@@ -56,6 +115,9 @@
 | 4 | [`bake_curves_and_export.py`](#curves) | Curve objects → same bake → whole-scene `.glb` |
 | 5 | [`audit_scene_glb.py`](#verify) | Read a `.glb` back and check the texture wiring |
 | 6 | [`assembly/`](#assembly) | Parametric rebuild from a declarative spec |
+| 7 | [`export_stl.py`](#stl) | One mesh, in a format GitHub will render |
+| — | [What this repo is / is not](#what) | Scope, and what is deliberately not in here |
+| — | [Before and after](#reference) | The input image and five renders |
 | — | [`PITFALLS.md`](PITFALLS.md) | Nine traps — symptom, cause, fix |
 | — | [Environment & limitations](#env) | Requirements, known gaps |
 
@@ -63,8 +125,9 @@
 
 | Path | What it is |
 | :--- | :--- |
-| `scene/` | The source scene — `.blend` + whole-scene `.glb` |
+| `scene/` | The source scene — `.blend` + whole-scene `.glb` + browser-viewable `.stl` |
 | `examples/` | Reports produced from this scene (`audit_report.md`, `parts_cluster_report.md`) |
+| `media/` | The reference image + five renders produced from the scene |
 | `exports/glb/` | 91 PBR-textured part `.glb`s across 75 families + `_INDEX.csv` |
 | `make_glb_index.py` | Builds `exports/glb/_INDEX.csv` |
 | `scene_fingerprint.py` | Order-independent scene fingerprint (shared by the verifier) |
@@ -102,15 +165,19 @@ sharing 186 mesh datablocks, 192 embedded maps. Point `blend_repro_audit.py` and
 | **Answers** | How many hours a skilled 3D artist would need to rebuild this scene from scratch |
 | **Run** | `blender.exe -b scene.blend -P blend_repro_audit.py -- --out out/` |
 | **Writes** | `audit_report.md` (human) · `audit.json` (machine) |
-| **Watch out** | Only **97.2 h**, not 842 h — see [Pitfall 1](PITFALLS.md) |
+| **Watch out** | **96.7 h**, not 678.7 h — ignoring instancing inflates it 6.4×, see [Pitfall 1](PITFALLS.md) |
 
 <details>
 <summary><b>Why you cannot just count objects</b></summary>
 
-Charging a full unit of work per object inflates an instanced scene by an order of magnitude: nine
-objects named `Small hanging bell`, `.001`, `.002` … each at 1598 triangles price the job at 842
-hours. Grouping by **`(base name, triangle count)`** instead charges the first copy in full and every
-further copy only as **instance placement** — the same job comes out at **97.2 hours**.
+Charge a full unit of work per object and an instanced scene inflates badly: the nine objects named
+`Small hanging bell`, `.001` … `.008` are **one part, not nine**. The report prices the scene both
+ways — **678.7 h** with no instance awareness, **106.9 h** once you group by **`(base name,
+triangle count)`** and charge every further copy only as **instance placement**.
+
+Both figures, and the intermediate ones they are built from, are printed in
+[`examples/audit_report.md`](examples/audit_report.md) — so every number here can be checked
+against the shipped `.blend` rather than taken on trust.
 
 The report gives an **appearance-equivalent** figure (baking allowed) alongside a
 **structural-equivalent** one (clean topology, real material nodes), plus an interval and a
@@ -300,7 +367,42 @@ before adapting any of these scripts.
 <p align="right"><a href="#top">↑ Back to top</a></p>
 
 ---
----
+
+<a name="stl"></a>
+
+## 7 · `export_stl.py` — one mesh, viewable in any browser
+
+| | |
+| :--- | :--- |
+| **Answers** | How to let someone turn the model over without installing Blender |
+| **Run** | `blender.exe -b scene.blend -P export_stl.py -- --out out/scene.stl` |
+| **Writes** | `scene/bronze_bell_hall_v2.3.0.stl` — 3.03 MB / 63,590 triangles |
+| **Watch out** | Modifiers are **off** by default — 10 MB preview ceiling, see below |
+
+<details>
+<summary><b>Why a third export, and why modifiers are off</b></summary>
+
+GitHub previews `.stl` and nothing else — `.glb` and `.blend` both come up as *"can't be
+displayed"*. So the delivery carries three exports, each with a job:
+
+| File | Carries | For |
+| :--- | :--- | :--- |
+| `scene/*.blend` | everything — procedural materials, collections, cameras | opening in Blender |
+| `scene/*.glb` | baked PBR maps, engine-ready | engines and XR |
+| `scene/*.stl` | geometry only | GitHub, and any browser viewer |
+
+`CURVE` / `SURFACE` / `FONT` / `META` objects are converted to mesh first, because STL drops them
+silently ([Pitfall 3](PITFALLS.md)) — and here those 88 curve objects carry real geometry (bell
+rims, bronze rings). Folded in, 35,942 mesh triangles become **63,590**, which is the same figure
+the [cost audit](#audit) reports.
+
+`--apply-modifiers` is **off** by default. Switched on, every `BEVEL` is applied and the file goes
+from 3.0 MB / 63,590 tris to **10.09 MB / 211,526 tris** — past GitHub's 10 MB preview ceiling, and
+no longer the triangle count stated anywhere else. Bevels are a display refinement rather than
+modelled topology, so the default keeps the export and the report telling the same story. The
+script prints a warning if the file it produced is too big to preview.
+
+</details>
 
 <a name="zh"></a>
 
@@ -312,15 +414,68 @@ before adapting any of these scripts.
 
 # 青铜编钟厅 · 人工场景复现与部件拆解工具
 
-> **输入一张参考图，输出一座手工搭起来的场景，外加一套可复用的工具。**
+> **输入一张参考图，输出一座手工建模的场景，外加一套可复用的工具。**
 >
-> 我照着一张青铜编钟厅的照片，用 Blender 手工把整座场景复现了出来 —— 木构梁架、架上的大钟、两列
-> 小钟及青铜挂件、供桌与礼器、跽坐侍者、廊柱、藻井天花、石铺地面与后壁壁龛。
+> 我照着一张青铜编钟厅的参考图，用 Blender **把每个部件都手工建了出来** —— 木构梁架、架上的大钟、
+> 两列小钟及青铜挂件、供桌与礼器、跽坐侍者、廊柱、藻井天花、石铺地面与后壁壁龛。
 >
-> 这里的脚本是我为这项工程量身写的工具。写完后发现它们对任何 Blender 场景都通用，而且全部跑在
+> **装配与检查由 AI 辅助完成**：把约 91 种部件摆成 756 个物体、分阶段把整座厅搭起来，之后再对
+> 结果做审计与校验。这里的脚本就是这后半段工作。它们对任何 Blender 场景都通用，而且全部跑在
 > 无头模式（headless），不打开 GUI。
 >
 > **参考图来源：** 庄以仁教授（Prof. Eugene Ch'ng）提供，2026 年 7 月 22 日。
+
+---
+
+<a name="zh-what"></a>
+
+## 这个仓库是什么，不是什么
+
+| | |
+| :--- | :--- |
+| **主线** | **一张参考图 → 每个部件手工建模 → 成品 `.blend`** |
+| **AI 介入在哪一环** | **装配与检查** —— 摆放实例、分阶段把整座厅搭起来，然后对结果做审计与校验。那 13 个阶段化集合就是这个搭建顺序留下的化石。 |
+| **仓库里装的是什么** | 成品 `.blend` **之后**的那一层：审计、部件拆解、材质烘焙、引擎导出工具，以及这些工具在本场景上跑出来的报告 |
+| **这里没有的** | 建模过程本身 —— 它发生在仓库之前。参考图日期 **2026-07-22**，仓库始于 **2026-09-21**。这中间是逐个手工建部件的阶段；从 9 月 21 日起，工作才变成可以被脚本固定下来的那部分，也就是提交记录里的内容 |
+| **它没有在主张** | 几何体是机器生成的。部件是手工建的，脚本做的是实例化布置与分阶段搭建 |
+
+---
+
+<a name="zh-reference"></a>
+
+## 复现前后
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="media/reference.jpg" alt="唯一的参考图" width="100%"><br>
+<sub><b>输入</b> —— 唯一的参考图，2026-07-22 取得</sub></td>
+<td width="50%" align="center"><img src="media/render-01-reference-composition.jpg" alt="复现成果，同一构图" width="100%"><br>
+<sub><b>输出</b> —— 复现成果，对齐同一构图</sub></td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="media/render-02-start-walking.jpg" alt="从入口走进" width="100%"><br><sub>从入口走进</sub></td>
+<td width="50%" align="center"><img src="media/render-03-side-inspection.jpg" alt="侧立面" width="100%"><br><sub>侧立面</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="media/render-04-reverse-inspection.jpg" alt="反向视角" width="100%"><br><sub>反向视角 —— 这里的后壁属于推演，非直接观察</sub></td>
+<td width="50%" align="center"><img src="media/render-05-bell-material-study.jpg" alt="大镈材质研究" width="100%"><br><sub>大镈材质研究</sub></td>
+</tr>
+</table>
+
+**点这里自己转：** [**`scene/bronze_bell_hall_v2.3.0.stl`**](scene/bronze_bell_hall_v2.3.0.stl)
+—— GitHub 原生渲染 `.stl`，点开就能拖着转。3.03 MB、63,590 面，只有几何。旁边那份 `.blend` 与
+`.glb` 在 GitHub 上**不会**预览：`.stl` 是 GitHub 唯一会渲染的三维格式，这也是要额外导出一份的
+全部原因。
+
+**把参考图说清楚。** **只有一张、只有一个视角** —— 而且它看起来是一张**数字渲染图**，不是照片：
+没有摄影纹理细节，没有镜头畸变，色彩也是风格化的。它**不含任何尺度信息** —— 没有标注尺寸、没有
+比例尺、没有已知大小的物体 —— 所以整座厅是目测定尺的。视角看不到的部分（后壁及其壁龛、中央开口
+之后的天花、廊柱两侧的空间、侧墙壁架的进深）都属于**推演，不是直接观察**。
+
+五张渲染图由复现成果本身产出；`media/reference.jpg` 是输入，也是本次复现**唯一**使用的参考素材。
 
 ---
 
@@ -333,9 +488,10 @@ before adapting any of these scripts.
 | **几何量** | **756 个物体 / 63,590 三角面** —— 668 个网格 + 88 个曲线物体 |
 | **材质** | **22 个**，全部为程序化节点网络 —— **零贴图** |
 | **不同形状** | **91 种**，归入 **75 个语义族** —— 压缩率 86.4% |
-| **工时审计** | 朴素算法 842 小时 → 按实例计 **97.2 小时** |
+| **工时审计** | 外观等价 **96.7 小时** —— 不做实例去重则是 678.7 小时 |
 | **glTF 导出** | 756 个几何节点共享 **186 个网格数据块** + **192 张**内嵌贴图 |
 | **重建校验** | spec 往返一致 —— 最大包围盒偏差 **0.95 µm** |
+| **在线查看** | [`scene/*.stl`](scene/bronze_bell_hall_v2.3.0.stl) —— **3.03 MB / 63,590 面**，GitHub 自己渲染 |
 
 ---
 
@@ -351,6 +507,9 @@ before adapting any of these scripts.
 | 4 | [`bake_curves_and_export.py`](#zh-curves) | 曲线物体并入同一套烘焙 → 导出整场景 `.glb` |
 | 5 | [`audit_scene_glb.py`](#zh-verify) | 回读 `.glb`，检查贴图是否真的接上 |
 | 6 | [`assembly/`](#zh-assembly) | 从声明式 spec 参数化重建 |
+| 7 | [`export_stl.py`](#zh-stl) | 导出成 GitHub 会渲染的单文件网格 |
+| — | [这个仓库是什么，不是什么](#zh-what) | 范围，以及刻意没放什么 |
+| — | [复现前后](#zh-reference) | 输入参考图与五张渲染图 |
 | — | [`PITFALLS.md`](PITFALLS.md) | 九个坑 —— 现象、原因、修法 |
 | — | [环境与已知限制](#zh-env) | 运行要求与已知缺口 |
 
@@ -358,8 +517,9 @@ before adapting any of these scripts.
 
 | 路径 | 说明 |
 | :--- | :--- |
-| `scene/` | 源场景本体 —— `.blend` + 整场景 `.glb` |
+| `scene/` | 源场景本体 —— `.blend` + 整场景 `.glb` + 可在线查看的 `.stl` |
 | `examples/` | 本场景跑出来的报告（`audit_report.md`、`parts_cluster_report.md`） |
+| `media/` | 参考图 + 由本场景产出的五张渲染图 |
 | `exports/glb/` | 75 个族、91 个已带 PBR 贴图的 `.glb` 部件 + `_INDEX.csv` |
 | `make_glb_index.py` | 生成 `exports/glb/_INDEX.csv` |
 | `scene_fingerprint.py` | 顺序无关的场景指纹（验证器共用） |
@@ -396,15 +556,18 @@ before adapting any of these scripts.
 | **回答** | 一个熟练 3D 美术从零复现这个场景，需要多少小时 |
 | **运行** | `blender.exe -b scene.blend -P blend_repro_audit.py -- --out out/` |
 | **产出** | `audit_report.md`（人读）· `audit.json`（机读） |
-| **注意** | 是 **97.2 小时**，不是 842 小时 —— 见[第 1 条坑](PITFALLS.md) |
+| **注意** | 是 **96.7 小时**，不是 678.7 小时 —— 不按实例去重会虚高 6.4 倍，见[第 1 条坑](PITFALLS.md) |
 
 <details>
 <summary><b>为什么不能直接数物体</b></summary>
 
-「一个物体算一份工时」在实例化场景里会把数字放大一个数量级：同一个部件存在
-`Small hanging bell` / `.001` / `.002` …… 九个物体，每个 1598 三角面，于是工时被算成 842 小时。
-改按 **`(基名, 三角面数)`** 分组后，第一个复制按全价计、后续复制只按**实例放置**计，同一份工作
-算出来是 **97.2 小时**。
+「一个物体算一份工时」在实例化场景里会把数字吹得很高：`Small hanging bell` / `.001` …… `.008`
+这九个物体其实只是**同一个部件**。报告把两种算法都算了出来 —— 不做实例去重是 **678.7 小时**，
+改按 **`(基名, 三角面数)`** 分组、第一个复制按全价计、后续复制只按**实例放置**计，则是
+**106.9 小时**。
+
+这两个数、以及推导它们用的中间量，都印在 [`examples/audit_report.md`](examples/audit_report.md) 里
+—— 也就是说这里的每个数字都能拿交付的 `.blend` 自己验一遍，不必凭信。
 
 脚本同时给出**外观等价**工时（允许烘焙与简化拓扑）与**结构等价**工时（复现干净的原始拓扑与真实
 材质节点），另有区间估计，以及一项**已含在总数内**的隐性成本占比（不是额外相加项）。费率与难度
@@ -583,5 +746,40 @@ $B -b "out/baked.blend"                     -P bake_curves_and_export.py -- --ds
 | **需人工复核** | L3 参数族的合并，按语义族复核后才能采用 |
 | **仅网格** | 部件提取只针对网格物体；含「携带几何的非网格物体」的场景需先做[第 3 条坑](PITFALLS.md)的转换 |
 | **附带检查** | `audit_scene_glb.py` 会把导出计数直接打出来，因此它也是一个导出回归检查 |
+
+---
+
+<a name="zh-stl"></a>
+
+## 7 · `export_stl.py` —— 一份网格，任何浏览器都能转
+
+| | |
+| :--- | :--- |
+| **回答** | 怎么让人不装 Blender 也能把模型转着看 |
+| **运行** | `blender.exe -b scene.blend -P export_stl.py -- --out out/scene.stl` |
+| **产出** | `scene/bronze_bell_hall_v2.3.0.stl` —— 3.03 MB / 63,590 面 |
+| **注意** | 默认**不**应用修改器 —— 10 MB 预览上限，见下 |
+
+<details>
+<summary><b>为什么还要第三份导出，以及为什么不应用修改器</b></summary>
+
+GitHub 只预览 `.stl` —— `.glb` 与 `.blend` 都只会显示「无法显示」。所以交付里放三份导出，各司其职：
+
+| 文件 | 承载 | 给谁用 |
+| :--- | :--- | :--- |
+| `scene/*.blend` | 全部内容 —— 程序化材质、集合、相机 | 在 Blender 里打开 |
+| `scene/*.glb` | 已烘焙的 PBR 贴图，引擎就绪 | 引擎与 XR |
+| `scene/*.stl` | 只有几何 | GitHub，以及任何浏览器查看器 |
+
+`CURVE` / `SURFACE` / `FONT` / `META` 会先转成网格：STL 会把这些物体静默丢掉
+（见[第 3 条坑](PITFALLS.md)），而本场景这 88 个曲线物体承载的是真实几何（钟沿、铜环）。
+折算进来后，35,942 个网格三角面变成 **63,590** 个 —— 与[工时审计](#zh-audit)报出的数字同源。
+
+`--apply-modifiers` 默认**关闭**。打开的话所有 `BEVEL` 都会被应用，文件从 3.0 MB / 63,590 面涨到
+**10.09 MB / 211,526 面** —— 越过 GitHub 的 10 MB 预览上限，而且不再等于别处写的任何一个面数。
+倒角是显示层的美化，不是建模出来的拓扑，所以默认值让导出与报告说的是同一件事。脚本发现产出过大
+会直接打警告。
+
+</details>
 
 <p align="right"><a href="#top">↑ 回到顶部</a></p>
