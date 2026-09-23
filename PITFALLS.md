@@ -1,3 +1,11 @@
+<a name="top"></a>
+
+<p align="center">
+  <b>English</b> &nbsp;·&nbsp; <a href="#zh">中文</a> &nbsp;·&nbsp; <a href="README.md">README</a>
+</p>
+
+---
+
 # Pitfalls — nine traps from a hand-built Blender pipeline
 
 Found the hard way while building the audit / bake / export pipeline in this repository. Each entry
@@ -35,6 +43,14 @@ gives the symptom, the cause and the fix. The numbers here are the ones the READ
 
 ---
 
+<a name="zh"></a>
+
+<p align="center">
+  <a href="#top">English</a> &nbsp;·&nbsp; <b>中文</b> &nbsp;·&nbsp; <a href="README.md">README</a>
+</p>
+
+---
+
 # 几个容易踩的坑 —— 搭建 Blender 管线时踩出来的九个
 
 九个在搭建这条管线时踩出来的坑，每条都写了现象、原因与修法。编号即 README 里引用的「第 N 条坑」。
@@ -63,3 +79,8 @@ gives the symptom, the cause and the fix. The numbers here are the ones the READ
    Blender 的网格顶点是 float32，在本场景约 10 m 的尺度下量化步长约 0.6 µm。
 9. **`export_apply=True` 会静默摧毁实例化** —— 756 个物体共享 186 个网格，会变成 756 个网格，**全程
    没有任何报错**。共享必须自己提前建好，然后显式告诉导出器 **`export_apply=False`** —— 见第 4 节。
+
+<p align="right">
+  <a href="#top">↑ 回到顶部 / Back to top</a> &nbsp;·&nbsp; <a href="README.md">← README</a>
+</p>
+
