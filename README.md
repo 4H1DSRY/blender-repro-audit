@@ -12,16 +12,15 @@ Blender's headless mode — no GUI.
 
 ## The reconstruction, in short
 
-- **Decompose before modelling.** The hall *reads* as enormously complex, but it is built from a
-  small set of repeated elements — beams, post collars, panel rails, bell hangers, bell bodies —
-  arranged in arrays. Model one of each and place instances; that is the whole game.
+- **Decompose before modelling.** The hall *reads* as enormously complex, but it is built from a small
+  set of repeated elements — beams, post collars, panel rails, bell hangers, bell bodies — arranged in
+  arrays. Model one of each and place instances; that is the whole game.
 - **Build in passes:** timber frame → bronze hardware → furnishings and figures → lighting.
-- **Procedural materials, zero textures.** Every material is node-built, so the palette is tuned
-  from a handful of parameters and the file stays self-contained.
+- **Procedural materials, zero textures** — every material is node-built, so the palette comes from a
+  handful of parameters and the file stays self-contained.
 - **Result:** 668 mesh objects, 35,942 triangles, 22 materials, no rig, no animation — and after
-  clustering, only **91 distinct shapes** in **75 semantic families** (86.4% compression). That
-  ratio is what made the job tractable. Add the 88 curve objects (see trap 3) and the scene
-  totals **756 geometry objects / 63,590 triangles**.
+  clustering, only **91 distinct shapes** in **75 semantic families** (86.4% compression), which is what
+  made the job tractable. With the 88 curve objects (trap 3): **756 geometry objects / 63,590 tris**.
 
 | Path | What it is |
 | --- | --- |
@@ -38,16 +37,13 @@ Blender's headless mode — no GUI.
 | `compare_blends.py` | Prove two `.blend` files hold the same scene |
 | `strip_embedded_scripts.py` | Strip embedded Text datablocks before shipping |
 
-**`scene/`** holds the two files everything else was run on:
-
-- `bronze_bell_hall_v2.3.0.blend` (621 KB) — the working file. 22 materials, all procedural
-  and no image textures, so it carries no external dependency at all. Re-saved to strip the
-  embedded audit script (trap 7); the scene itself is unchanged, per `assembly/hygiene-verify.md`.
-- `bronze_bell_hall_v2.3.0.glb` (8.07 MB) — the whole scene, engine-ready: 756 geometry nodes
-  sharing 186 mesh datablocks, 192 embedded maps.
-
-Point `blend_repro_audit.py` and `blend_extract_parts.py` at that `.blend` and the reports in
-`examples/` reproduce.
+**`scene/`** holds the two files everything else was run on. `bronze_bell_hall_v2.3.0.blend`
+(621 KB) is the working file — 22 procedural materials, no image textures, so zero external
+dependencies; it was re-saved to strip the embedded audit script (trap 7), and the scene itself is
+unchanged per `assembly/hygiene-verify.md`. `bronze_bell_hall_v2.3.0.glb` (8.07 MB) is the whole
+scene, engine-ready: 756 geometry nodes sharing 186 mesh datablocks, 192 embedded maps. Point
+`blend_repro_audit.py` and `blend_extract_parts.py` at the `.blend` and the reports in `examples/`
+reproduce.
 
 ## 1. `blend_repro_audit.py` — cost audit
 
@@ -63,13 +59,10 @@ Answers *"how many hours would a skilled 3D artist need to reproduce this scene 
 scene by an order of magnitude: nine objects named `Small hanging bell`, `.001`, `.002` … each at
 1598 triangles price the job at 842 hours. Grouping by **`(base name, triangle count)`** instead
 charges the first copy in full and every further copy only as **instance placement** — the same job
-comes out at **97.2 hours**.
-
-It reports an **appearance-equivalent** figure (visually identical result, baking allowed) alongside
-a **structural-equivalent** one (clean original topology and real material nodes), plus an interval
-and a hidden-cost share that is *already included* in the totals, not an addition. Rates and
-difficulty bands live in `RATES` / `DIFFICULTY_BANDS` at the top of the script — retune them for a
-different skill level.
+comes out at **97.2 hours**. The report gives an **appearance-equivalent** figure (baking allowed)
+alongside a **structural-equivalent** one (clean topology, real material nodes), plus an interval and
+a hidden-cost share *already included* in the totals, not an addition. Rates live in `RATES` /
+`DIFFICULTY_BANDS` at the top of the script.
 
 ## 2. `blend_extract_parts.py` — extract, cluster, export
 
@@ -129,34 +122,19 @@ source `.blend`.
 
 ## 4. `bake_curves_and_export.py` — curves, then the whole-scene `.glb`
 
-`bake_materials.py` assumes the scene *is* meshes. This scene is not: 88 of its objects are `CURVE`
-objects carrying 27,648 real triangles — the bronze rings, the bell crown and mouth-rim mouldings,
-the gilded panel borders. This script is the last mile. It brings them into the same bake pipeline
-and then writes the engine-ready `.glb`.
+`bake_materials.py` assumes the scene *is* meshes. This scene is not: **88 of its objects are `CURVE`
+objects carrying 27,648 real triangles** — the bronze rings, the bell crown and mouth-rim mouldings,
+the gilded panel borders. This script is the last mile: it folds them into the same bake pipeline and
+then writes the engine-ready `.glb`. Five steps — record curve tri counts (so the conversion is
+*shown* lossless, not assumed safe) → curves to meshes → re-cluster with the pipeline's own tolerance
+(**88 objects → 7 shape groups**, so maps drop **176 → 14**) → purge unused materials **sweeping every
+object type** (the fix for trap 3) → collapse instances (**756 objects → 186 datablocks**) and export
+with `export_apply=False` (**trap 9**).
 
 ```bash
 "path/to/blender.exe" -b "out/scene_baked.blend" -P bake_curves_and_export.py -- \
     --dst "out/scene.glb" [--tex-dir "out/textures"] [--samples 1]
 ```
-
-Five steps, in order:
-
-1. **Record before converting.** Every curve object's triangle count is captured first, so the
-   conversion can later be *shown* not to have lost geometry rather than assumed to be safe.
-2. **Curves to meshes**, all 88 at once via `bpy.ops.object.convert(target="MESH")`.
-3. **Re-cluster with the pipeline's own tolerance** (`cluster(objs, 0.02, 0)`). The 88 curve objects
-   collapse to just **7 shape groups**, so 7 representatives get baked instead of 88 and the map
-   count drops **176 to 14**. The pipeline notes record that these groups were checked to share one
-   material (`mixed_materials = 0`) — that check is what makes one bake per group a safe shortcut
-   rather than a gamble.
-4. **Purge materials nothing uses — across every object type.** This is the fix for trap 3: the
-   sweep walks `bpy.data.objects`, not just meshes. Walk meshes only and the two curve-only
-   materials look like zero-reference orphans, get deleted, and those parts arrive in the engine
-   with no material at all and no error anywhere.
-5. **Collapse instances, then export.** Objects sharing both a geometry fingerprint and a material
-   tuple are made to share one mesh datablock (**756 objects to 186 datablocks**), orphan datablocks
-   are swept, and the scene is exported with `export_apply=False` — see trap 9 for why that flag is
-   not optional.
 
 Nothing is written back to disk; the input `.blend` is never modified.
 
@@ -164,29 +142,19 @@ Nothing is written back to disk; the input `.blend` is never modified.
 
 Baking is only correct if the maps actually **arrive**. glTF export drops procedural node networks
 *silently* — no error, no warning, just a white model. So the last step asserts against the artifact
-instead of trusting the exporter.
-
-This one is plain Python — **no Blender needed**:
+instead of trusting the exporter. This one is plain Python — **no Blender needed**:
 
 ```bash
 python audit_scene_glb.py "scene/bronze_bell_hall_v2.3.0.glb" [--out report.txt]
 ```
 
 It parses the GLB container by hand (magic `0x46546C67`, JSON chunk `0x4E4F534A`, BIN chunk
-`0x004E4942`, each chunk 4-byte aligned) and reports:
-
-- **object counts** — nodes, meshes, materials, images, textures, samplers, cameras;
-- **where the bytes went** — bufferViews split into image versus geometry. On this scene: 192 image
-  views totalling **6.78 MB**, 573 geometry views totalling **1.05 MB**;
-- accessor types, mesh primitive count, image mime types, and duplicated image data;
-- **the actual assertion** — per material, whether `baseColorTexture`,
-  `metallicRoughnessTexture`, `normalTexture` and `emissiveTexture` are wired, plus a count of
-  materials still **pure white** (`baseColorFactor == [1,1,1]` with no base texture).
-
-On this scene it returns `baseColorTexture 98/98`, `metallicRoughnessTexture 94/98`,
-`normalTexture 0/98`, `pure white 0`. That is how "normal maps are not baked" gets *measured*
-rather than asserted. The `BAKED_CV_g*` names in its sample output are also a direct check that
-step 3 above actually ran on the curve groups.
+`0x004E4942`) and reports object counts, where the bytes went (192 image views = **6.78 MB** vs 573
+geometry views = **1.05 MB**), accessor types and image mime types — then the assertion that matters:
+per material, whether `baseColorTexture` / `metallicRoughnessTexture` / `normalTexture` /
+`emissiveTexture` are wired, plus how many are still **pure white**. Here: `baseColorTexture 98/98`,
+`metallicRoughnessTexture 94/98`, `normalTexture 0`, `pure white 0` — that is how "normal maps are
+not baked" gets *measured*. The `BAKED_CV_g*` names in its output also prove step 3 above ran.
 
 ### The pipeline, end to end
 
@@ -204,60 +172,22 @@ touch Blender scene state, and neither modifies its input `.blend`.
 
 ## 6. `assembly/` — parametric rebuild from a spec
 
-The tools above audit, bake and export the scene; `assembly/` **rebuilds** it. `extract_assembly_spec.py` dumps the
-whole hall to a declarative JSON spec — 186 recipes covering 756 objects, all 22 procedural node
-graphs, the lighting rig and the cameras. `assemble_scene.py` then reconstructs every object from
-primitives and shader graphs in a fresh file, never opening the original `.blend`.
-`verify_assembly.py` proves the rebuild is the same scene, two independent ways.
+The tools above audit, bake and export the scene; `assembly/` **rebuilds** it. `extract_assembly_spec.py`
+dumps the whole hall to a declarative JSON spec — 186 recipes covering 756 objects, all 22 procedural
+node graphs, the lighting rig and the cameras. `assemble_scene.py` then reconstructs every object from
+primitives and shader graphs in a fresh file, never opening the original `.blend`, and
+`verify_assembly.py` proves the rebuild is the same scene two independent ways.
 
-Both checks pass and the digest over the **evaluated** geometry matches exactly
-(`78b135637a82de87`): across 756 objects the worst bounding-box deviation is **0.95 um**. Commands
-are in `assembly/README.md`; the full report is `assembly/verification.md`.
+Both checks pass and the digest over the **evaluated** geometry matches exactly (`78b135637a82de87`):
+across 756 objects the worst bounding-box deviation is **0.95 um**. Commands are in `assembly/README.md`,
+the full report in `assembly/verification.md`. Not reproduced: Blender's UI state (workspaces, screen
+layout) and embedded Text datablocks.
 
-Not reproduced: Blender's UI state (workspaces, screen layout) and embedded Text datablocks.
+## Pitfalls
 
-## Traps worth knowing
-
-1. **Instances inflate audits** — group by `(base name, triangle count)` before charging hours;
-   the difference here is 842 h versus 97.2 h.
-2. **L3 merges geometric twins, not semantic twins.** A 0.1 × 0.1 twelve-face prism might be a
-   lantern bracket or a table leg. The report marks such merges `⚠ spans N semantic families` —
-   split the group back apart by semantic family before acting on it.
-3. **Mesh-only is not the whole scene.** `CURVE`, `SURFACE`, `FONT` and `META` objects can carry real
-   visible geometry — here **88 curve objects holding 27,648 triangles**, whose shared materials look
-   exactly like zero-reference orphans. Delete those and your parts arrive in the engine
-   material-less, with no error message anywhere. Convert non-mesh types first, or build the "in use"
-   material set from *all* object types.
-4. **`bpy.ops.object.bake` bakes every material slot**, and each slot's material needs an active,
-   selected image texture node, or the run dies mid-way. Install a temporary image node in *every*
-   material on the object (the fix lives in `bake_socket()`). Flatten procedural inputs by routing the
-   socket to an **Emission** node and baking `EMIT` — no light sampling, so `--samples 1` is enough.
-5. **`|` in names bites twice:** escape it in Markdown tables, and use `safe_name()` for index keys,
-   because the exporter rewrites pipes to `_` (`Great bell | hollow cast shell`).
-6. **`Material.use_nodes` is deprecated in Blender 6.0** — use `getattr(mat, "node_tree", None)`.
-7. **A `.blend` can carry code.** Text datablocks are invisible in the viewport but travel with
-   the file — a build or audit script left behind, or pasted into the Text Editor, ships to
-   whoever receives the `.blend`: internal notes, absolute paths and all. This scene arrived with
-   our own `blend_repro_audit.py` embedded (1,138 lines / 40,679 chars). Run
-   `strip_embedded_scripts.py` before committing or delivering; it removes Text datablocks only,
-   and `compare_blends.py` proves the scene is untouched (measured: 0 m deviation, all 756 objects).
-   **Then check every copy.** The same scene exists in two places here — a 621 KB editable `.blend`
-   in the repo and a 6.3 MB baked `.blend` inside the delivery zip — and stripping one leaves the
-   other still carrying the script. Enumerate `bpy.data.texts` in *each* `.blend` before packaging,
-   not just the one you happen to be working on.
-8. **Never fold a derived value into an equivalence check.** A bounding-box size is `max - min`,
-   so a spec that quantises lengths to 1 um can round the *difference* onto the far side of a
-   boundary and report a phantom 1e-6 mismatch — 6 of 668 objects did exactly that here. Compare
-   derived lengths against a stated tolerance, and print the measured deviation next to the PASS.
-   The tolerance is honest too: Blender stores mesh vertices as float32, whose quantum at this
-   scene's ~10 m extent is ~0.6 um, so a 1 um spec discards nothing the `.blend` could represent.
-
-9. **`export_apply=True` silently destroys instancing.** It evaluates every object separately, so
-   each one gets its own copy of the evaluated mesh and the shared datablocks built in the previous
-   step are gone — 756 objects sharing 186 meshes becomes 756 meshes, and the `.glb` grows
-   accordingly with no error message. Here it is not a performance trade-off but a correctness one:
-   the sharing has to be built by hand first, and the exporter then told **`export_apply=False`** to
-   leave it alone.
+Numbered cross-references in this README (*trap 3*, *trap 9*) resolve to the entries in
+**[`PITFALLS.md`](PITFALLS.md)** — nine traps found the hard way while building this pipeline, each with
+its symptom, cause and fix. Worth reading before adapting any of these scripts.
 
 ## Environment & limitations
 
@@ -272,9 +202,9 @@ dependencies.
 - The bake covers base colour and metallic/roughness only. **Normal maps are not baked**, so relief
   carried by bump nodes does not survive the glTF export.
 - Part extraction operates on mesh objects; a scene with geometry-carrying non-mesh objects needs the
-  conversion step in trap 3 first.
-- The exported `.glb` carries **756 geometry nodes over 186 mesh datablocks** plus 192 embedded maps.
-  `audit_scene_glb.py` prints those counts directly, so it doubles as a regression check on the export.
+  trap-3 conversion first. The exported `.glb` carries **756 geometry nodes over 186 mesh datablocks**
+  plus 192 embedded maps, and `audit_scene_glb.py` prints those counts directly — so it doubles as a
+  regression check on the export.
 
 ---
 ---
@@ -290,13 +220,13 @@ Blender 场景都通用，就单独抽出来成了这个仓库。所有脚本都
 
 ## 这项复现工作，几句话说完
 
-- **先分解，再建模。** 这座厅堂*看起来*极其复杂，实际是由少量重复构件 —— 梁、柱头箍、板条、
-  钟挂件、钟体 —— 阵列排布而成。各建一个、其余放实例，就是全部诀窍。
+- **先分解，再建模。** 这座厅堂*看起来*极其复杂，实际是由少量重复构件 —— 梁、柱头箍、板条、钟挂件、
+  钟体 —— 阵列排布而成。各建一个、其余放实例，就是全部诀窍。
 - **分轮推进：** 木构梁架 → 青铜配件 → 陈设与人像 → 灯光。
-- **全程序化材质，零贴图。** 每个材质都是节点搭建，整套配色由少数几个参数控制，文件保持自包含。
+- **全程序化材质，零贴图** —— 每个材质都是节点搭建，整套配色由少数几个参数控制，文件保持自包含。
 - **结果：** 668 个网格物体、35,942 三角面、22 个材质、无骨骼、无动画 —— 聚类之后只有
-  **91 种不同形状**，归入 **75 个语义族**（压缩率 86.4%）。正是这个比例让整件事可行。再加上 88 个曲线物体（见第 3 条坑），整场景合计
-**756 个几何物体 / 63,590 三角面**。
+  **91 种不同形状**、归入 **75 个语义族**（压缩率 86.4%），正是这个比例让整件事可行。加上 88 个曲线
+  物体（见第 3 条坑）：**756 个几何物体 / 63,590 三角面**。
 
 | 路径 | 说明 |
 | --- | --- |
@@ -313,15 +243,12 @@ Blender 场景都通用，就单独抽出来成了这个仓库。所有脚本都
 | `compare_blends.py` | 证明两个 `.blend` 是同一个场景 |
 | `strip_embedded_scripts.py` | 交付前剥离内嵌的 Text 数据块 |
 
-**`scene/`** 里放着上面所有工具实际处理的源文件：
-
-- `bronze_bell_hall_v2.3.0.blend`（621 KB）—— 工作文件。22 个材质全部程序化、零贴图，
-  因此**没有任何外部依赖**。已重新保存以剥离内嵌的审计脚本（见第 7 条坑）；
-  场景本体未变，证据见 `assembly/hygiene-verify.md`。
-- `bronze_bell_hall_v2.3.0.glb`（8.07 MB）—— 整场景，引擎即用：756 个几何节点共享
-  186 个网格数据块，192 张贴图全部内嵌。
-
-把 `blend_repro_audit.py` 与 `blend_extract_parts.py` 指向这个 `.blend`，`examples/` 里的报告即可复现。
+**`scene/`** 里放着上面所有工具实际处理的源文件。`bronze_bell_hall_v2.3.0.blend`（621 KB）是工作
+文件 —— 22 个材质全部程序化、零贴图，因此**没有任何外部依赖**；已重新保存以剥离内嵌的审计脚本
+（见第 7 条坑），场景本体未变，证据见 `assembly/hygiene-verify.md`。
+`bronze_bell_hall_v2.3.0.glb`（8.07 MB）是整场景，引擎即用：756 个几何节点共享 186 个网格数据块，
+192 张贴图全部内嵌。把 `blend_repro_audit.py` 与 `blend_extract_parts.py` 指向这个 `.blend`，
+`examples/` 里的报告即可复现。
 
 ## 1. `blend_repro_audit.py` —— 工时成本审计
 
@@ -336,11 +263,9 @@ Blender 场景都通用，就单独抽出来成了这个仓库。所有脚本都
 **为什么不能直接数物体。** 「一个物体算一份工时」在实例化场景里会把数字放大一个数量级：同一个
 部件存在 `Small hanging bell` / `.001` / `.002` …… 九个物体，每个 1598 三角面，于是工时被算成
 842 小时。改按 **`(基名, 三角面数)`** 分组后，第一个复制按全价计、后续复制只按**实例放置**计，
-同一份工作算出来是 **97.2 小时**。
-
-脚本同时给出**外观等价**工时（产出视觉一致的结果，允许烘焙与简化拓扑）与**结构等价**工时
-（复现干净的原始拓扑与真实材质节点），另有区间估计，以及一项**已含在总数内**的隐性成本占比
-（不是额外相加项）。费率与难度分级是脚本顶部的常量 `RATES` / `DIFFICULTY_BANDS`，换人换水平直接改。
+同一份工作算出来是 **97.2 小时**。脚本同时给出**外观等价**工时（允许烘焙与简化拓扑）与**结构等价**
+工时（复现干净的原始拓扑与真实材质节点），另有区间估计，以及一项**已含在总数内**的隐性成本占比。
+费率与难度分级是脚本顶部的常量 `RATES` / `DIFFICULTY_BANDS`。
 
 ## 2. `blend_extract_parts.py` —— 提取唯一部件 + 聚类 + 导出
 
@@ -395,57 +320,37 @@ Blender 的 glTF 导出器是**贴图导出器，不是节点导出器**。本�
 
 ## 4. `bake_curves_and_export.py` —— 曲线，然后是整场景 `.glb`
 
-`bake_materials.py` 假设「场景 = 网格物体」。这个场景不是：它有 88 个物体是 `CURVE` 类型，
-携带 27,648 个真实三角面 —— 铜环、钟冠与钟口缘线脚、鎏金板边框。这个脚本是**最后一公里**：
-把它们并入同一套烘焙管线，然后写出引擎即用的 `.glb`。
+`bake_materials.py` 假设「场景 = 网格物体」。这个场景不是：**88 个物体是 `CURVE` 类型，携带
+27,648 个真实三角面** —— 铜环、钟冠与钟口缘线脚、鎏金板边框。这个脚本是**最后一公里**：把它们并入
+同一套烘焙管线，然后写出引擎即用的 `.glb`。五步 —— 先记曲线三角面数（这样「转换没丢几何」是**证明**
+出来的，不是假设安全的）→ 曲线转网格 → 用管线自己的容差重新聚类（**88 个物体 → 7 组**，贴图
+**176 张 → 14 张**）→ 清理无用材质**必须遍历所有物体类型**（第 3 条坑的修法）→ 折叠实例
+（**756 个物体 → 186 个数据块**）并以 `export_apply=False` 导出（**第 9 条坑**）。
 
 ```bash
 "Blender路径/blender.exe" -b "out/scene_baked.blend" -P bake_curves_and_export.py -- \
     --dst "out/scene.glb" [--tex-dir "out/textures"] [--samples 1]
 ```
 
-五步，按顺序：
-
-1. **转换前先记账。** 先记下每个曲线物体的三角面数，事后才能**证明**（而不是假设）转换没丢几何。
-2. **曲线 → 网格**：一次选中全部 88 个，`bpy.ops.object.convert(target="MESH")`。
-3. **用管线自己的容差重新聚类**（`cluster(objs, 0.02, 0)`）。88 个曲线件只并成 **7 组**，
-   于是只烘 7 个代表而不是 88 个，**贴图从 176 张降到 14 张**。管线注释记录了已核对这些组
-   组内材质一致（`mixed_materials = 0`）—— 正是这项核对让「每组只烘一次」成为安全捷径，
-   而不是一场赌注。
-4. **只删真正没人用的材质 —— 且必须遍历所有物体类型。** 这是第 3 条坑的修法：清理时遍历
-   `bpy.data.objects` 而非只看网格。只看网格的话，那**两个只被曲线引用的材质**会被当成
-   「零引用孤儿」删掉，那些零件进引擎后完全没有材质，而且**全程没有任何报错**。
-5. **实例折叠，然后导出。** 把「几何指纹 + 材质元组」都相同的物体合并为共用一个网格数据块
-   （**756 个物体 → 186 个数据块**），回收孤立数据块，最后以 `export_apply=False` 导出 ——
-   为什么这个开关不是可选项，见第 9 条坑。
-
 全程不回写磁盘，输入 `.blend` 不被修改。
 
 ## 5. `audit_scene_glb.py` —— 回读 `.glb`，检查接线
 
-烘焙只有在贴图**确实送达**时才算对。glTF 导出丢弃程序化节点网络是**静默的** —— 不报错、
-不警告，只是变白模。所以最后一步是对**产物**做断言，而不是相信导出器。
-
-这一个用纯 Python 就够了，**不需要 Blender**：
+烘焙只有在贴图**确实送达**时才算对。glTF 导出丢弃程序化节点网络是**静默的** —— 不报错、不警告，
+只是变白模。所以最后一步是对**产物**做断言，而不是相信导出器。这一个用纯 Python 就够了，
+**不需要 Blender**：
 
 ```bash
 python audit_scene_glb.py "scene/bronze_bell_hall_v2.3.0.glb" [--out report.txt]
 ```
 
-它手工解析 GLB 容器（magic `0x46546C67`、JSON 块 `0x4E4F534A`、BIN 块 `0x004E4942`，
-每块 4 字节对齐），报告：
-
-- **对象计数** —— nodes、meshes、materials、images、textures、samplers、cameras；
-- **字节都花在哪** —— bufferViews 按「图像 vs 几何」拆开。本场景实测：192 个图像 view 共
-  **6.78 MB**，573 个几何 view 共 **1.05 MB**；
-- accessors 类型分布、网格图元数、图像 mimeType、重复图像数据；
-- **真正的断言** —— 逐材质检查 `baseColorTexture`、`metallicRoughnessTexture`、
-  `normalTexture`、`emissiveTexture` 是否接上，并统计仍然**纯白**
-  （`baseColorFactor == [1,1,1]` 且无 base 贴图）的材质数。
-
-本场景输出 `baseColorTexture 98/98`、`metallicRoughnessTexture 94/98`、`normalTexture 0/98`、
-`纯白 0` —— 也就是说，「法线贴图没有烘焙」这件事是**量出来的**，不是嘴上说的。
-样本输出里的 `BAKED_CV_g*` 材质名同时也直接证明了上面第 3 步真的在曲线分组上跑过。
+它手工解析 GLB 容器（magic `0x46546C67`、JSON 块 `0x4E4F534A`、BIN 块 `0x004E4942`，每块 4 字节
+对齐），报告对象计数、字节去向（192 个图像 view 共 **6.78 MB**，573 个几何 view 共 **1.05 MB**）、
+accessors 类型分布与图像 mimeType —— 然后是真正重要的那个断言：逐材质检查 `baseColorTexture` /
+`metallicRoughnessTexture` / `normalTexture` / `emissiveTexture` 是否接上，以及还有几个仍然是
+**纯白**（`baseColorFactor == [1,1,1]` 且无 base 贴图）。本场景输出 `baseColorTexture 98/98`、
+`metallicRoughnessTexture 94/98`、`normalTexture 0`、`纯白 0` —— 「法线贴图没有烘焙」这件事是
+**量出来的**。输出里的 `BAKED_CV_g*` 材质名同时也证明了上面第 3 步真的跑过。
 
 ### 完整流水线（按顺序）
 
@@ -463,52 +368,19 @@ $B -b "out/baked.blend"                     -P bake_curves_and_export.py -- --ds
 
 ## 6. `assembly/` —— 从声明式 spec 参数化重建
 
-上面五个工具负责审计、烘焙与导出，`assembly/` 则是**重建**场景。`extract_assembly_spec.py` 把整座厅堂导出成
-一份声明式 JSON spec —— **186 条配方覆盖 756 个物体**，含全部 22 个程序化节点图、灯光组与相机。
-`assemble_scene.py` 随后在一个全新文件里用图元 + 着色器图把每个物体重新装配出来，
-**全程不打开原始 `.blend`**。`verify_assembly.py` 用两项独立检查判定重建是否忠实。
+上面五个工具负责审计、烘焙与导出，`assembly/` 则是**重建**场景。`extract_assembly_spec.py` 把整座
+厅堂导出成一份声明式 JSON spec —— **186 条配方覆盖 756 个物体**，含全部 22 个程序化节点图、灯光组与
+相机。`assemble_scene.py` 随后在一个全新文件里用图元 + 着色器图把每个物体重新装配出来，**全程不打开
+原始 `.blend`**；`verify_assembly.py` 用两项独立检查判定重建是否忠实。
 
-两项都通过，**求值后几何的摘要值完全一致**（`78b135637a82de87`）—— 756 个物体中最大的包围盒偏差
-是 **0.95 µm**。命令见 `assembly/README.md`，完整报告见 `assembly/verification.md`。
-
-**不重建的部分**：Blender 的界面状态（工作区、屏幕布局）与内嵌 Text 数据块。
+两项都通过，**求值后几何的摘要值完全一致**（`78b135637a82de87`）—— 756 个物体中最大的包围盒偏差是
+**0.95 µm**。命令见 `assembly/README.md`，完整报告见 `assembly/verification.md`。**不重建的部分**：
+Blender 的界面状态（工作区、屏幕布局）与内嵌 Text 数据块。
 
 ## 几个容易踩的坑
 
-1. **实例会虚高审计结果** —— 计工时前先按 `(基名, 三角面数)` 分组；本场景差值是 842 小时对
-   97.2 小时。
-2. **L3 合的是几何同形，不是语义等价。** 一根 0.1 × 0.1 的 12 面棱柱，既可能是**灯笼的挑梁**，
-   也可能是**桌腿**。报告里对这类合并会打 `⚠ 跨 N 个语义族` 的警告 —— 人工复核时看到该标记，
-   就该按语义族拆回去再采用。
-3. **只处理网格不等于处理完了整个场景。** `CURVE`、`SURFACE`、`FONT`、`META` 类型的物体同样可能
-   携带真实可见几何 —— 本场景有 **88 个曲线物体、共 27,648 个三角面**，而它们共用的材质看起来和
-   「零引用的孤儿材质」一模一样。一旦被当作孤儿删掉，导进引擎的部件就是没有材质的白模，**全程
-   没有任何报错**。要么先把非网格类型转成网格，要么在统计「在用材质」时遍历**所有**物体类型。
-4. **`bpy.ops.object.bake` 会烘焙物体的全部材质槽**，每个槽的材质都必须有一个「活动且选中的图像
-   纹理节点」，否则会在跑的中途崩掉。解法是给该物体用到的**每个**材质都装一个临时图像节点（实现
-   在 `bake_socket()` 里）。程序化输入必须改接到 **Emission** 节点再烘 `EMIT` 才能拍平；EMIT 直接
-   求值、不采样光照，所以 `--samples 1` 就够。
-5. **名字里的 `|` 会咬两次：** Markdown 表格里必须转义，索引键必须用 `safe_name()` —— 因为导出时
-   竖线会被替换成 `_`（如 `Great bell | hollow cast shell`）。
-6. **`Material.use_nodes` 在 Blender 6.0 已废弃**，改用 `getattr(mat, "node_tree", None)`。
-7. **`.blend` 会携带代码。** Text 数据块在视口里看不见，却跟着文件一起走 —— 跑构建/审计脚本
-   时留下的、或往 Text Editor 里粘过的代码，会原样交付给收到 `.blend` 的人：内部备注、绝对
-   路径都在里面。这份场景当初就内嵌着我们自己的 `blend_repro_audit.py`（1,138 行 / 40,679
-   字符）。提交或交付前先跑 `strip_embedded_scripts.py`；它**只删 Text 数据块**，并由
-   `compare_blends.py` 证明场景本体没被改动（实测 756 个物体偏差 0 m）。
-   **然后逐个副本都要查。** 同一份场景在本项目里存在两处 —— 仓库里 621 KB 的可编辑 `.blend`，
-   以及交付 zip 里 6.3 MB 的烘焙版 `.blend` —— 只清一份，另一份照样带着脚本。
-   打包前要**对每一个** `.blend` 都列一遍 `bpy.data.texts`，不能只查手头正在改的那个。
-8. **别把「派生量」塞进等价性判定。** 包围盒尺寸是 `max - min`，所以一份把长度量化到 1 µm 的
-   spec，可能让这个**差值**落到四舍五入边界的另一侧，报出一个并不存在的 1e-6 差异 —— 本场景
-   668 个物体里就有 6 个是这样。派生长度要按**声明的容差**比较，并且把**实测偏差**打在 PASS
-   旁边。这个容差本身也是诚实的：Blender 的网格顶点是 float32，在本场景约 10 m 的尺度下量化
-   步长约 0.6 µm，所以 1 µm 的 spec 并没有丢掉 `.blend` 本来能表示的任何信息。
-
-9. **`export_apply=True` 会静默摧毁实例化。** 它逐物体求值，于是每个物体都拿到自己独立的一份
-   求值后网格，上一步刚建立的数据块共享全部作废：756 个物体共享 186 个网格 → 变成 756 个网格，
-   `.glb` 随之膨胀，**全程没有任何报错**。这里它不是性能取舍而是**正确性**问题 ——
-   共享必须自己提前建好，然后显式告诉导出器 **`export_apply=False`**，别去动它。
+本文里出现的「第 N 条坑」编号，对应 **[`PITFALLS.md`](PITFALLS.md)** 里的条目 —— 九个在搭建这条管线时
+踩出来的坑，每条都写了现象、原因与修法。改造这里的任何脚本之前，建议先读一遍。
 
 ## 环境与已知限制
 
@@ -520,6 +392,6 @@ $B -b "out/baked.blend"                     -P bake_curves_and_export.py -- --ds
 - L3 参数族的合并需要人工按语义族复核后才能采用。
 - 烘焙只覆盖 base color 与 metallic/roughness。**法线贴图没有烘焙**，程序化材质里由 bump 节点
   承担的表面起伏不会进入 glTF 导出。
-- 部件提取只针对网格物体；含「携带几何的非网格物体」的场景，需要先做第 3 条坑里的转换步骤。
-- 导出后的 `.glb` 是 **756 个几何节点共享 186 个网格数据块** + 192 张内嵌贴图；
-  `audit_scene_glb.py` 会把这几项数字直接打出来，因此它也是一个导出回归检查。
+- 部件提取只针对网格物体；含「携带几何的非网格物体」的场景需先做第 3 条坑的转换。导出后的 `.glb`
+  是 **756 个几何节点共享 186 个网格数据块** + 192 张内嵌贴图，`audit_scene_glb.py` 会把这几项数字
+  直接打出来，因此它也是一个导出回归检查。

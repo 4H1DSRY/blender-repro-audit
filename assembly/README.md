@@ -33,7 +33,7 @@ blender.exe -b "scene/bronze_bell_hall_v2.3.0.blend" -P assembly/verify_assembly
 `extract_assembly_spec.py` also accepts `--indent N` if you want readable JSON rather than the
 compact default, and `assemble_scene.py` accepts `--material-preview` to set every 3D viewport to
 Material Preview in the saved file (otherwise a rebuilt file opens in Solid and shows flat viewport
-colours — see trap 7 in the root README).
+colours — see trap 7 in `../PITFALLS.md`).
 
 ## What the spec holds
 
@@ -157,7 +157,7 @@ verify_assembly.py         用两项独立检查证明二者是同一个场景
 
 `extract_assembly_spec.py` 另接受 `--indent N`（输出可读缩进 JSON，默认紧凑）；
 `assemble_scene.py` 另接受 `--material-preview`（把保存文件里所有 3D 视口设为材质预览）——
-否则重建出来的文件打开时是 Solid 模式，只显示纯色视口色（见根 README 第 7 条坑）。
+否则重建出来的文件打开时是 Solid 模式，只显示纯色视口色（见 `../PITFALLS.md` 第 7 条坑）。
 
 ## spec 里装了什么
 
