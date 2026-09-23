@@ -81,8 +81,9 @@ check B  spec round-trip      PASS  all 8 spec sections byte-identical
          assembler warnings     0 node failures, 0 unknown parts, 0 non-bevel modifiers
 ```
 
-Full output: `verification.md`. Scene-level provenance for the committed `.blend` (which was re-saved
-to strip an embedded script): `hygiene-verify.md`.
+Full output: `verification.md`. Scene-level provenance for the two `.blend` copies that were re-saved
+to strip an embedded script — the committed one and the one inside the delivery package:
+`hygiene-verify.md`.
 
 ## Honest caveats
 
@@ -200,8 +201,8 @@ verify_assembly.py         用两项独立检查证明二者是同一个场景
         装配器警告       0 个节点失败、0 个未知部件、0 个非 Bevel 修改器
 ```
 
-完整输出见 `verification.md`。随仓库提交的 `.blend` 的场景级溯源（该文件被重新保存以剥离内嵌
-脚本）见 `hygiene-verify.md`。
+完整输出见 `verification.md`。两份被重新保存以剥离内嵌脚本的 `.blend`（随仓库提交的那份，以及
+交付包内的那份）的场景级溯源见 `hygiene-verify.md`。
 
 ## 诚实的前提与限制
 
