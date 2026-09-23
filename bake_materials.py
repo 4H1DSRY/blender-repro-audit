@@ -387,4 +387,7 @@ def main():
     print(json.dumps(stats, ensure_ascii=False, indent=1))
 
 
-main()
+# 入口保护：bake_curves_and_export.py 会 `import bake_materials as bm` 复用烘焙函数，
+# 若此处裸调 main()，被导入时会立刻跑完一整套烘焙。只有直接执行才进主流程。
+if __name__ == "__main__":
+    main()
